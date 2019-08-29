@@ -1,0 +1,78 @@
+All code not mentioned below is original code created by Cerebras Systems Inc.
+and is licensed under the BSD 3-Clause License as set forth in LICENSE.  All
+modified versions of code listed below are Copyright (c) 2019 Cerebras Systems
+Inc. and are licensed under the BSD 3-Clause License as set forth in LICENSE,
+except that modified versions of UNet/FCN PyTorch code are licensed under the
+MIT License, which is reproduced at the end of this file.  All unmodified
+versions of code listed below remain licensed under the original license
+referenced below.
+
+
+Open source code license propagation notice:
+The following files are modified version of pytorch examples code which is
+released under BSD 3-Clause License, Copyright (c) 2017.
+See https://github.com/pytorch/examples for full license details.
+    1. online-normalization/examples/imagenet/main.py
+    2. online-normalization/experiments/mlp/utils.py
+    3. online-normalization/experiments/recurrent/utils.py
+    4. online-normalization/experiments/recurrent/ptb_main.py
+    5. online-normalization/experiments/recurrent/data.py
+    6. online-normalization/experiments/recurrent/model/model.py
+    7. online-normalization/experiments/resnet/utils.py
+    8. online-normalization/experiments/resnet/imagenet_main.py
+    9. online-normalization/experiments/unet/utils.py
+
+The following files are unmodified version of pytorch examples code which is
+released under BSD 3-Clause License, Copyright (c) 2017.
+See https://github.com/pytorch/examples for full license details.
+    1. online-normalization/examples/imagenet/requirements.txt
+    2. online-normalization/experiments/mlp/requirements.txt
+    3. online-normalization/experiments/recurrent/requirements.txt
+    4. online-normalization/experiments/resnet/requirements.txt
+
+The following files are unmodified version of pytorch vision code which is
+released under BSD 3-Clause License, Copyright (c) 2017.
+See https://github.com/pytorch/vision for full license details.
+    1. online-normalization/examples/imagenet/resnet.py
+
+The following files are modified version of pytorch vision code which is
+released under BSD 3-Clause License, Copyright (c) 2017.
+See https://github.com/pytorch/vision for full license details.
+    1. online-normalization/experiments/resnet/model/model.py
+
+The following files are unmodified version of UNet/FCN PyTorch code which is
+released under MIT License, Copyright (c) 2018 Naoto Usuyama.
+See https://github.com/usuyama/pytorch-unet for full license details.
+    1. online-normalization/experiments/unet/simulation.py
+
+The following files are modified version of UNet/FCN PyTorch code which is
+released under MIT License, Copyright (c) 2018 Naoto Usuyama.
+See https://github.com/usuyama/pytorch-unet for full license details.
+    1. online-normalization/experiments/unet/model/model.py
+    2. online-normalization/experiments/unet/model/loss.py
+    3. online-normalization/experiments/unet/simulation.py
+
+
+MIT License
+
+Copyright (c) 2018 Naoto Usuyama
+Copyright (c) 2019 Cerebras Systems Inc.
+All rights reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
