@@ -81,7 +81,7 @@ def norm(num_features, mode='batch', eps=1e-05, momentum=0.1,
             module tracks the running mean and variance, and when set to ``False``,
             this module does not track such statistics and always uses batch
             statistics in both training and eval modes. Argument valid when
-            using batch or instance norm. Default: ``True``
+            using batch norm. Default: ``True``
 
         Note:
             1. When using BN affine = weight & bias
@@ -115,10 +115,8 @@ def norm(num_features, mode='batch', eps=1e-05, momentum=0.1,
         warnings.warn('Normalizer: Instance')
         affine = weight and bias
         if weight != bias:
-            warnings.warn('affine not used in batch norm')
-        normalizer = nn.InstanceNorm2d(num_features, eps=eps,
-                                       momentum=momentum, affine=affine,
-                                       track_running_stats=track_running_stats)
+            warnings.warn('affine not used in instance norm')
+        normalizer = nn.InstanceNorm2d(num_features, eps=eps, affine=affine)
 
     elif mode == 'online':
         warnings.warn('Normalizer: Online')
