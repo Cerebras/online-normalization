@@ -1,5 +1,5 @@
 """
-Released under BSD 3-Clause License, 
+Released under BSD 3-Clause License,
 Copyright (c) 2019 Cerebras Systems Inc.
 All rights reserved.
 
@@ -7,24 +7,18 @@ TensorFlow Implementation of the Online Normalization Layer
 """
 
 import tensorflow as tf
-from tensorflow.python.keras import layers as keras_layers
+from tensorflow.python.framework import dtypes
+from tensorflow.python.keras import backend as K, constraints, initializers, regularizers
+from tensorflow.python.keras.engine.base_layer import InputSpec
+from tensorflow.python.keras.utils import tf_utils
 from tensorflow.python.layers import base
 from tensorflow.python.ops import math_ops
-from tensorflow.python.keras import backend as K
-from tensorflow.python.keras.utils import tf_utils
-from tensorflow.python.framework import dtypes
-from tensorflow.python.framework import tensor_shape
-from tensorflow.python.keras import constraints
-from tensorflow.python.keras import initializers
-from tensorflow.python.keras import regularizers
-from tensorflow.python.keras.engine.base_layer import InputSpec
-from tensorflow.python.keras.engine.base_layer import Layer
 
 
 class OnlineNorm(base.Layer):
     """
-    Implementation of the 
-    [Online Normalization Algorithm](https://arxiv.org/abs/1905.05894) 
+    Implementation of the
+    [Online Normalization Algorithm](https://arxiv.org/abs/1905.05894)
 
     Note:
         Implemented with custom gradients, using the @tf.custom_gradient
@@ -60,7 +54,6 @@ class OnlineNorm(base.Layer):
         trainable: Boolean, if `True` also add variables to the graph
             collection `GraphKeys.TRAINABLE_VARIABLES`
             (see tf.Variable).  (Default: True)
-        b_size: batch size which is being trained. (Default: 1)
 
     Input shape:
       Arbitrary. Use the keyword argument `input_shape` (tuple of integers,
@@ -80,7 +73,7 @@ class OnlineNorm(base.Layer):
                  u_ctrl_initializer='zeros', v_ctrl_initializer='zeros',
                  beta_regularizer=None, gamma_regularizer=None,
                  beta_constraint=None, gamma_constraint=None,
-                 trainable=True, b_size=1, name=None, **kwargs):
+                 trainable=True, name=None, **kwargs):
         super(OnlineNorm, self).__init__(trainable=trainable,
                                          name=name, **kwargs)
         self.alpha_fwd = alpha_fwd
@@ -105,8 +98,8 @@ class OnlineNorm(base.Layer):
         self.u_ctrl_initializer = initializers.get(u_ctrl_initializer)
         self.v_ctrl_initializer = initializers.get(v_ctrl_initializer)
 
-        self.b_size = b_size
         self.norm_ax = None
+        self._outputs_for_backward = None
 
     def control_normalization(self, inputs):
         r"""Applies Control Normalization (the per feature exponential moving
@@ -133,6 +126,7 @@ class OnlineNorm(base.Layer):
             netout: list: [forward normalized activations,
                            backward function]
         """
+
         def backward(deltas):
             """
             Wrapper for the custom backwards pass using ctrl process
@@ -145,13 +139,15 @@ class OnlineNorm(base.Layer):
                 grad_delta: output deltas for inputs
             """
 
+            assert self._outputs_for_backward is not None
+
             alpha_bkw = self.alpha_bkw
-            with tf.control_dependencies([deltas, self.outputs, self.s]):
+            with tf.control_dependencies([deltas, self._outputs_for_backward, self.s]):
                 # control with v
                 delta_temp = deltas
                 delta_temp -= tf.reshape(
                     self.v_ctrl, self.broadcast_shape
-                ) * self.outputs * (1 - alpha_bkw)
+                ) * self._outputs_for_backward * (1 - alpha_bkw)
 
                 # update v control variables
                 # update the estimate of v controller, controlling
@@ -159,7 +155,7 @@ class OnlineNorm(base.Layer):
                 update_v = tf.assign_add(
                     self.v_ctrl,
                     tf.reduce_mean(
-                        delta_temp * self.outputs,
+                        delta_temp * self._outputs_for_backward,
                         axis=self.norm_ax,
                         keepdims=False
                     )
@@ -199,6 +195,9 @@ class OnlineNorm(base.Layer):
                 netout: normalized activations
                 backward_wrapper: function handle for custom backward pass
             """
+
+            assert self._outputs_for_backward is None
+
             alpha = self.alpha_fwd
 
             scale = tf.assign(
@@ -217,12 +216,12 @@ class OnlineNorm(base.Layer):
                     self.epsilon
                 )
 
-                out_assign = tf.assign(self.outputs, outputs)
+                self._outputs_for_backward = outputs
 
             # compute batch statistics
             mu_bn, var_bn = tf.nn.moments(inputs, self.norm_ax, keep_dims=False)
 
-            with tf.control_dependencies([out_assign, mu_bn, var_bn]):
+            with tf.control_dependencies([self._outputs_for_backward, mu_bn, var_bn]):
                 # get the new mean and variances
                 new_mu = self.mu + (1 - alpha) * (mu_bn - self.mu)
                 new_var = (alpha * self.var + (1 - alpha) * var_bn +
@@ -268,8 +267,8 @@ class OnlineNorm(base.Layer):
         if isinstance(self.axis, int):
             self.axis = [self.axis]
         if not isinstance(self.axis, list):
-              raise TypeError('axis must be int or list, type given: %s'
-                              % type(self.axis))
+            raise TypeError('axis must be int or list, type given: %s'
+                            % type(self.axis))
 
         for idx, x in enumerate(self.axis):
             if x < 0:
@@ -357,14 +356,6 @@ class OnlineNorm(base.Layer):
             's',
             stat_shape,
             initializer=self.stream_var_initializer,
-            dtype=param_dtype,
-            trainable=False
-        )
-
-        self.outputs = tf.get_variable(
-            'outputs',
-            [self.b_size] + input_shape[1:],
-            initializer=tf.zeros_initializer,
             dtype=param_dtype,
             trainable=False
         )
@@ -485,7 +476,6 @@ def online_norm(inputs,
                 beta_constraint=None,
                 gamma_constraint=None,
                 trainable=True,
-                b_size=1,
                 name=None, **kwargs):
     """
     Functional interface to the Online Normalization Layer defined above
@@ -523,7 +513,6 @@ def online_norm(inputs,
         trainable: Boolean, if `True` also add variables to the graph
             collection `GraphKeys.TRAINABLE_VARIABLES`
             (see tf.Variable). (Default: True)
-        b_size: batch size which is being trained. (Default: 1)
 
     Return:
         Normalization Layer output
@@ -544,7 +533,6 @@ def online_norm(inputs,
                        beta_constraint=beta_constraint,
                        gamma_constraint=gamma_constraint,
                        trainable=trainable,
-                       b_size=b_size,
                        name=name,
                        **kwargs)
     return layer.apply(inputs, training=training)
