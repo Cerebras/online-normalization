@@ -17,9 +17,7 @@ from tensorflow.python.framework import tensor_shape
 from tensorflow.python.keras import constraints
 from tensorflow.python.keras import initializers
 from tensorflow.python.keras import regularizers
-#from tensorflow.python.keras.engine.base_layer import InputSpec
-#from tensorflow.python.keras.engine.base_layer import Layer
-from tensorflow .keras.layers import Layer
+from tensorflow.keras.layers import Layer
 from tensorflow.keras.layers import InputSpec
 
 class BatchOnlineNorm(Layer):
