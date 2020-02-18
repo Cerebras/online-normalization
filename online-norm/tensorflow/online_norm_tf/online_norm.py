@@ -17,8 +17,8 @@ from tensorflow.python.framework import tensor_shape
 from tensorflow.python.keras import constraints
 from tensorflow.python.keras import initializers
 from tensorflow.python.keras import regularizers
-from tensorflow.python.keras.engine.base_layer import InputSpec
-from tensorflow.python.keras.engine.base_layer import Layer
+from tensorflow.keras.layers import InputSpec
+from tensorflow.keras.layers import Layer
 
 
 class OnlineNorm(base.Layer):
@@ -336,7 +336,7 @@ class OnlineNorm(base.Layer):
                 self.norm_ax += [idx]
 
         # streaming normalization statistics
-        self.mu = tf.get_variable(
+        self.mu = self.add_weight(
             'mu',
             stat_shape,
             initializer=self.stream_mu_initializer,
@@ -344,7 +344,7 @@ class OnlineNorm(base.Layer):
             trainable=False
         )
 
-        self.var = tf.get_variable(
+        self.var = self.add_weight(
             'var',
             stat_shape,
             initializer=self.stream_var_initializer,
@@ -353,7 +353,7 @@ class OnlineNorm(base.Layer):
         )
 
         # bprop cache variables
-        self.s = tf.get_variable(
+        self.s = self.add_weight(
             's',
             stat_shape,
             initializer=self.stream_var_initializer,
@@ -361,7 +361,7 @@ class OnlineNorm(base.Layer):
             trainable=False
         )
 
-        self.outputs = tf.get_variable(
+        self.outputs = self.add_weight(
             'outputs',
             [self.b_size] + input_shape[1:],
             initializer=tf.zeros_initializer,
@@ -370,7 +370,7 @@ class OnlineNorm(base.Layer):
         )
 
         # u and v control variables
-        self.u_ctrl = tf.get_variable(
+        self.u_ctrl = self.add_weight(
             'u_ctrl',
             stat_shape,
             initializer=self.u_ctrl_initializer,
@@ -378,7 +378,7 @@ class OnlineNorm(base.Layer):
             trainable=False
         )
 
-        self.v_ctrl = tf.get_variable(
+        self.v_ctrl = self.add_weight(
             'v_ctrl',
             stat_shape,
             initializer=self.v_ctrl_initializer,
