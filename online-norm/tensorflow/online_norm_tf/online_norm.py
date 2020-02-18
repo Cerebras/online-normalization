@@ -21,7 +21,7 @@ from tensorflow.keras.layers import InputSpec
 from tensorflow.keras.layers import Layer
 
 
-class OnlineNorm(base.Layer):
+class OnlineNorm(Layer):
     """
     Implementation of the 
     [Online Normalization Algorithm](https://arxiv.org/abs/1905.05894) 
