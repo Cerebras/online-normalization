@@ -502,7 +502,7 @@ class BatchOnlineNorm(Layer):
                                 (self.b_size, 1, 1))
 
         # streaming normalization statistics
-        self.mu = self.add_weight(
+        self.mu = self.add_variable(
             'mu',
             stat_shape,
             initializer=self.stream_mu_initializer,
@@ -510,7 +510,7 @@ class BatchOnlineNorm(Layer):
             trainable=False
         )
 
-        self.var = self.add_weight(
+        self.var = self.add_variable(
             'var',
             stat_shape,
             initializer=self.stream_var_initializer,
@@ -519,7 +519,7 @@ class BatchOnlineNorm(Layer):
         )
 
         # bprop cache variables
-        self.s = self.add_weight(
+        self.s = self.add_variable(
             's',
             stat_shape,
             initializer=self.stream_var_initializer,
@@ -527,7 +527,7 @@ class BatchOnlineNorm(Layer):
             trainable=False
         )
 
-        self.outputs = self.add_weight(
+        self.outputs = self.add_variable(
             'outputs',
             [self.b_size] + input_shape[1:],
             initializer=tf.zeros_initializer,
@@ -536,14 +536,14 @@ class BatchOnlineNorm(Layer):
         )
 
         # capture previous batch statistics
-        self.mu_p = self.add_weight(
+        self.mu_p = self.add_variable(
             'mu_p',
             stat_shape,
             initializer=self.stream_mu_initializer,
             dtype=param_dtype,
             trainable=False
         )
-        self.var_p = self.add_weight(
+        self.var_p = self.add_variable(
             'var_p',
             stat_shape,
             initializer=self.stream_var_initializer,
@@ -552,7 +552,7 @@ class BatchOnlineNorm(Layer):
         )
 
         # u control variables
-        self.u_ctrl = self.add_weight(
+        self.u_ctrl = self.add_variable(
             'u_ctrl',
             stat_shape,
             initializer=self.u_ctrl_initializer,
@@ -560,7 +560,7 @@ class BatchOnlineNorm(Layer):
             trainable=False
         )
         # capture stats of d for previous time step needed for u controller
-        self.u_ctrl_p = self.add_weight(
+        self.u_ctrl_p = self.add_variable(
             'u_ctrl_p',
             stat_shape,
             initializer=self.u_ctrl_initializer,
@@ -569,7 +569,7 @@ class BatchOnlineNorm(Layer):
         )
 
         # v control variables
-        self.v_p = self.add_weight(
+        self.v_p = self.add_variable(
             'v_p',
             stat_shape,
             initializer=self.v_ctrl_initializer,
@@ -577,7 +577,7 @@ class BatchOnlineNorm(Layer):
             trainable=False
         )
 
-        self.alpha_p = self.add_weight(
+        self.alpha_p = self.add_variable(
             'alpha_p',
             stat_shape,
             initializer=tf.ones_initializer,
@@ -585,7 +585,7 @@ class BatchOnlineNorm(Layer):
             trainable=False
         )
 
-        self.beta_p = self.add_weight(
+        self.beta_p = self.add_variable(
             'beta_p',
             stat_shape,
             initializer=self.v_ctrl_initializer,

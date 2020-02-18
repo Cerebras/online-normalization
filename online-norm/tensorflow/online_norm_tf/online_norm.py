@@ -336,7 +336,7 @@ class OnlineNorm(Layer):
                 self.norm_ax += [idx]
 
         # streaming normalization statistics
-        self.mu = self.add_weight(
+        self.mu = self.add_variable(
             'mu',
             stat_shape,
             initializer=self.stream_mu_initializer,
@@ -344,7 +344,7 @@ class OnlineNorm(Layer):
             trainable=False
         )
 
-        self.var = self.add_weight(
+        self.var = self.add_variable(
             'var',
             stat_shape,
             initializer=self.stream_var_initializer,
@@ -353,7 +353,7 @@ class OnlineNorm(Layer):
         )
 
         # bprop cache variables
-        self.s = self.add_weight(
+        self.s = self.add_variable(
             's',
             stat_shape,
             initializer=self.stream_var_initializer,
@@ -361,7 +361,7 @@ class OnlineNorm(Layer):
             trainable=False
         )
 
-        self.outputs = self.add_weight(
+        self.outputs = self.add_variable(
             'outputs',
             [self.b_size] + input_shape[1:],
             initializer=tf.zeros_initializer,
@@ -370,7 +370,7 @@ class OnlineNorm(Layer):
         )
 
         # u and v control variables
-        self.u_ctrl = self.add_weight(
+        self.u_ctrl = self.add_variable(
             'u_ctrl',
             stat_shape,
             initializer=self.u_ctrl_initializer,
@@ -378,7 +378,7 @@ class OnlineNorm(Layer):
             trainable=False
         )
 
-        self.v_ctrl = self.add_weight(
+        self.v_ctrl = self.add_variable(
             'v_ctrl',
             stat_shape,
             initializer=self.v_ctrl_initializer,
