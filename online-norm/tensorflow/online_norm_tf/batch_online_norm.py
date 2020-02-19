@@ -17,11 +17,10 @@ from tensorflow.python.framework import tensor_shape
 from tensorflow.python.keras import constraints
 from tensorflow.python.keras import initializers
 from tensorflow.python.keras import regularizers
-from tensorflow.python.keras.engine.base_layer import InputSpec
-from tensorflow.python.keras.engine.base_layer import Layer
+from tensorflow.keras.layers import Layer
+from tensorflow.keras.layers import InputSpec
 
-
-class BatchOnlineNorm(base.Layer):
+class BatchOnlineNorm(Layer):
     """
     Implementation of the 
     [Online Normalization Algorithm](https://arxiv.org/abs/1905.05894) 
@@ -477,10 +476,14 @@ class BatchOnlineNorm(base.Layer):
             self.beta = None
 
         # configure the statistics shape and the axis along which to normalize
-        self.norm_ax, stat_shape = [], []
+        self.norm_ax, stat_shape, self.broadcast_shape  = [], [], []
         for idx, ax in enumerate(input_shape):
-            if idx in self.axis or idx == 0:
+            if idx == 0:
+                stat_shape += [self.b_size]
+                self.broadcast_shape.append(1)
+            elif idx in self.axis:
                 stat_shape += [ax]
+                self.broadcast_shape.append(ax)
             if idx not in self.axis and idx != 0:
                 self.norm_ax += [idx]
 
@@ -499,7 +502,7 @@ class BatchOnlineNorm(base.Layer):
                                 (self.b_size, 1, 1))
 
         # streaming normalization statistics
-        self.mu = tf.get_variable(
+        self.mu = self.add_variable(
             'mu',
             stat_shape,
             initializer=self.stream_mu_initializer,
@@ -507,7 +510,7 @@ class BatchOnlineNorm(base.Layer):
             trainable=False
         )
 
-        self.var = tf.get_variable(
+        self.var = self.add_variable(
             'var',
             stat_shape,
             initializer=self.stream_var_initializer,
@@ -516,7 +519,7 @@ class BatchOnlineNorm(base.Layer):
         )
 
         # bprop cache variables
-        self.s = tf.get_variable(
+        self.s = self.add_variable(
             's',
             stat_shape,
             initializer=self.stream_var_initializer,
@@ -524,7 +527,7 @@ class BatchOnlineNorm(base.Layer):
             trainable=False
         )
 
-        self.outputs = tf.get_variable(
+        self.outputs = self.add_variable(
             'outputs',
             [self.b_size] + input_shape[1:],
             initializer=tf.zeros_initializer,
@@ -533,14 +536,14 @@ class BatchOnlineNorm(base.Layer):
         )
 
         # capture previous batch statistics
-        self.mu_p = tf.get_variable(
+        self.mu_p = self.add_variable(
             'mu_p',
             stat_shape,
             initializer=self.stream_mu_initializer,
             dtype=param_dtype,
             trainable=False
         )
-        self.var_p = tf.get_variable(
+        self.var_p = self.add_variable(
             'var_p',
             stat_shape,
             initializer=self.stream_var_initializer,
@@ -549,7 +552,7 @@ class BatchOnlineNorm(base.Layer):
         )
 
         # u control variables
-        self.u_ctrl = tf.get_variable(
+        self.u_ctrl = self.add_variable(
             'u_ctrl',
             stat_shape,
             initializer=self.u_ctrl_initializer,
@@ -557,7 +560,7 @@ class BatchOnlineNorm(base.Layer):
             trainable=False
         )
         # capture stats of d for previous time step needed for u controller
-        self.u_ctrl_p = tf.get_variable(
+        self.u_ctrl_p = self.add_variable(
             'u_ctrl_p',
             stat_shape,
             initializer=self.u_ctrl_initializer,
@@ -566,7 +569,7 @@ class BatchOnlineNorm(base.Layer):
         )
 
         # v control variables
-        self.v_p = tf.get_variable(
+        self.v_p = self.add_variable(
             'v_p',
             stat_shape,
             initializer=self.v_ctrl_initializer,
@@ -574,7 +577,7 @@ class BatchOnlineNorm(base.Layer):
             trainable=False
         )
 
-        self.alpha_p = tf.get_variable(
+        self.alpha_p = self.add_variable(
             'alpha_p',
             stat_shape,
             initializer=tf.ones_initializer,
@@ -582,7 +585,7 @@ class BatchOnlineNorm(base.Layer):
             trainable=False
         )
 
-        self.beta_p = tf.get_variable(
+        self.beta_p = self.add_variable(
             'beta_p',
             stat_shape,
             initializer=self.v_ctrl_initializer,
