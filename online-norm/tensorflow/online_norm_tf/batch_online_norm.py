@@ -7,18 +7,13 @@ TensorFlow Implementation of the Online Normalization Layer
 """
 
 import tensorflow as tf
-from tensorflow.python.keras import layers as keras_layers
 from tensorflow.python.layers import base
 from tensorflow.python.ops import math_ops
 from tensorflow.python.keras import backend as K
 from tensorflow.python.keras.utils import tf_utils
-from tensorflow.python.framework import dtypes
-from tensorflow.python.framework import tensor_shape
-from tensorflow.python.keras import constraints
-from tensorflow.python.keras import initializers
-from tensorflow.python.keras import regularizers
+from tensorflow.python.framework import dtype, tensor_shape
+from tensorflow.python.keras import constraints, initializers, regularizers
 from tensorflow.keras.layers import Layer
-from tensorflow.keras.layers import InputSpec
 
 class BatchOnlineNorm(Layer):
     """
@@ -445,7 +440,6 @@ class BatchOnlineNorm(Layer):
             if axis_to_dim[x] is None:
                 raise ValueError('Input has undefined `axis` dimension. Input '
                                  'shape: ', input_shape)
-        self.input_spec = InputSpec(ndim=ndims, axes=axis_to_dim)
 
         if len(axis_to_dim) == 1:
             # Single axis online norm
