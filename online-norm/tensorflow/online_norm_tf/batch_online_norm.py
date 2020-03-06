@@ -11,7 +11,7 @@ from tensorflow.python.layers import base
 from tensorflow.python.ops import math_ops
 from tensorflow.python.keras import backend as K
 from tensorflow.python.keras.utils import tf_utils
-from tensorflow.python.framework import dtype, tensor_shape
+from tensorflow.python.framework import dtypes, tensor_shape
 from tensorflow.python.keras import constraints, initializers, regularizers
 from tensorflow.keras.layers import Layer
 
