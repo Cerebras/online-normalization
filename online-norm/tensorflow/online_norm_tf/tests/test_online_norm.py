@@ -19,8 +19,8 @@ tf.logging.set_verbosity(tf.logging.ERROR)
 WIDTH = 32      # spacial width of data (about 3 x 5)
 HEIGHT = 32     # spacial height of data (about 3 x 5)
 CHANNELS = 256  # number of channels in generated data
-TEST_SIZE = 64  # number of datums in generated data
-B_SIZE = 8      # size of batch
+TEST_SIZE = 16  # number of datums in generated data
+B_SIZE = 4      # size of batch
 
 TEST_SIZE = B_SIZE * (TEST_SIZE // B_SIZE)
 

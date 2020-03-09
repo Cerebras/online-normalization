@@ -8,11 +8,11 @@ TensorFlow Implementation of the Online Normalization Layer
 
 import tensorflow as tf
 from tensorflow.python.ops import math_ops
-from tensorflow.python.keras import backend as K
-from tensorflow.python.keras.utils import tf_utils
 from tensorflow.python.framework import dtypes, tensor_shape
+from tensorflow.python.keras import backend as K
 from tensorflow.python.keras import constraints, initializers, regularizers
-from tensorflow.keras.layers import Layer
+from tensorflow.python.keras.utils import tf_utils
+from tensorflow.python.keras.layers import Layer
 
 
 class OnlineNorm(Layer):
