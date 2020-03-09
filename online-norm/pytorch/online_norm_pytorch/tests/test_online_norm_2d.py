@@ -21,8 +21,8 @@ class TestStringMethods(unittest.TestCase):
     """
     logger = logging.getLogger('test_logger')
 
-    def test010_similarity(self, b_size=8, dim=256,
-                           alpha_fwd=0.999, alpha_bkw=0.99, eps=1e-05, itrs=8):
+    def test010_similarity(self, b_size=4, dim=256,
+                           alpha_fwd=0.999, alpha_bkw=0.99, eps=1e-05, itrs=4):
         """ numerical comparison of online norm linearized vs loop """
         # instantiate inputs
         input = torch.randn(b_size, dim, 32, 32)

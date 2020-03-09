@@ -21,7 +21,7 @@ void onlinenorm_init(onlinenorm *on, float a, float ap) {
 	on->mu = 0;  /* assume initial input distribution is zero mean  */
 	on->s2 = 1;  /* assume initial input distribution is unit variance */
 	on->a = a;
-	on->e1 = 0; /* initialize to no accumulated error */
+	on->e1 = 0;  /* initialize to no accumulated error */
 	on->ey = 0;  /* initialize to no accumulated error */
 	on->ap = ap;
 }

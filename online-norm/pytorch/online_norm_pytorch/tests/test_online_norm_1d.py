@@ -21,8 +21,8 @@ class TestOnlineNorm1D(unittest.TestCase):
     """
     logger = logging.getLogger('test_logger')
 
-    def test010_similarity(self, b_size=8, dim=1024,
-                           alpha_fwd=0.999, alpha_bkw=0.99, eps=1e-05, itrs=8):
+    def test010_similarity(self, b_size=4, dim=1024,
+                           alpha_fwd=0.999, alpha_bkw=0.99, eps=1e-05, itrs=4):
         """ numerical similarity for online norm linearized vs loops """
         # instantiate inputs
         input = torch.randn(b_size, dim)
