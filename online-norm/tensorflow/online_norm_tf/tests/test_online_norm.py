@@ -64,9 +64,9 @@ def gen_data(test_size=TEST_SIZE, channels=CHANNELS,
     return inputs.astype(np.float32), deltas_in.astype(np.float32)
 
 
-class BatchOnlineNormTest(unittest.TestCase):
+class OnlineNormTest(unittest.TestCase):
     """
-    Class for implementing unit tests for the Batch Online Normalization Layer
+    Class for implementing unit tests for the Online Normalization Layer
     """
 
     def test010_bon_layer_build(self, alpha_fwd=ALPHA_FWD, alpha_bkw=ALPHA_BKW,
