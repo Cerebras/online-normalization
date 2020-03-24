@@ -24,13 +24,13 @@ class LayerScaling(nn.Module):
             Default: -1 (no grouping, use all channels)
         eps: a value added to the denominator for numerical stability.
             Default: 1e-5
-    
+
     Shape:
         - Input: :math:`(N, C, H, W)`
         - Output: :math:`(N, C, H, W)` (same shape as input)
-    
+
     Examples::
-    
+
         >>> ls = LayerScaling()
         >>> input = torch.randn(64, 128, 32, 32)
         >>> output = ls(input)

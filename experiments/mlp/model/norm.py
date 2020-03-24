@@ -114,7 +114,7 @@ def norm(num_features, mode='batch', eps=1e-05, momentum=0.1, affine=True,
     elif mode == 'none' or mode is None:
         warnings.warn('Normalizer: None')
         normalizer = Identity()
-    
+
     else:
         raise KeyError('mode options include: '
                        '"batch" | "layer" | "online" | "none"')
