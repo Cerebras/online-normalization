@@ -38,25 +38,25 @@ The following bash commands will reproduce the experimental results
 ### CIFAR
 
 ```bash
-python cifar10_main.py /path/to/data --model_dir /path/to/cache/model --norm_mode online --afwd 0.9990234375 --abkw 0.9921875
-python cifar10_main.py /path/to/data --model_dir /path/to/cache/model --norm_mode batch
-python cifar10_main.py /path/to/data --model_dir /path/to/cache/model --norm_mode layer
-python cifar10_main.py /path/to/data --model_dir /path/to/cache/model --norm_mode instance
-python cifar10_main.py /path/to/data --model_dir /path/to/cache/model --norm_mode group
+python cifar10_main.py /path/to/data --model-dir /path/to/cache/model --norm-mode online --afwd 0.9990234375 --abkw 0.9921875
+python cifar10_main.py /path/to/data --model-dir /path/to/cache/model --norm-mode batch
+python cifar10_main.py /path/to/data --model-dir /path/to/cache/model --norm-mode layer
+python cifar10_main.py /path/to/data --model-dir /path/to/cache/model --norm-mode instance
+python cifar10_main.py /path/to/data --model-dir /path/to/cache/model --norm-mode group
 
-python cifar100_main.py /path/to/data --model_dir /path/to/cache/model --norm_mode online --afwd 0.998046875 --abkw 0.9375
-python cifar100_main.py /path/to/data --model_dir /path/to/cache/model --norm_mode batch
-python cifar100_main.py /path/to/data --model_dir /path/to/cache/model --norm_mode layer
-python cifar100_main.py /path/to/data --model_dir /path/to/cache/model --norm_mode instance
-python cifar100_main.py /path/to/data --model_dir /path/to/cache/model --norm_mode group
+python cifar100_main.py /path/to/data --model-dir /path/to/cache/model --norm-mode online --afwd 0.998046875 --abkw 0.9375
+python cifar100_main.py /path/to/data --model-dir /path/to/cache/model --norm-mode batch
+python cifar100_main.py /path/to/data --model-dir /path/to/cache/model --norm-mode layer
+python cifar100_main.py /path/to/data --model-dir /path/to/cache/model --norm-mode instance
+python cifar100_main.py /path/to/data --model-dir /path/to/cache/model --norm-mode group
 ```
 For our experimentation, each setting is run 5 times. The median of 5 runs is reported.
 
 ### ImageNet
 
 ```bash
-python imagenet_main.py /path/to/data --model_dir /path/to/cache/model --norm_mode online --afwd 0.999 --abkw 0.99
-python imagenet_main.py /path/to/data --model_dir /path/to/cache/model --norm_mode batch
+python imagenet_main.py /path/to/data --model-dir /path/to/cache/model --norm-mode online --afwd 0.999 --abkw 0.99
+python imagenet_main.py /path/to/data --model-dir /path/to/cache/model --norm-mode batch
 ```
 For our experimentation, each setting is run 1 time.
 
@@ -64,13 +64,13 @@ For our experimentation, each setting is run 1 time.
 ### ImageNet Usage
 
 ```
-usage: imagenet_main.py [-h] [--model_dir MODEL_DIR] [-a ARCH] [-j N]
+usage: imagenet_main.py [-h] [--model-dir MODEL_DIR] [-a ARCH] [-j N]
                         [--epochs N] [--start-epoch N] [-b N] [--lr LR]
-                        [--lr_milestones LR_MILESTONES [LR_MILESTONES ...]]
-                        [--lr_multiplier M] [--momentum M] [--wd W] [-p N]
+                        [--lr-milestones LR_MILESTONES [LR_MILESTONES ...]]
+                        [--lr-multiplier M] [--momentum M] [--wd W] [-p N]
                         [--resume PATH] [-e] [--pretrained] [--seed SEED]
-                        [--norm_mode NORM] [--afwd AFWD] [--abkw ABKW]
-                        [--rm_layer_scaling] [--gn_num_groups GN_NUM_GROUPS]
+                        [--norm-mode NORM] [--afwd AFWD] [--abkw ABKW]
+                        [--ecm ECM] [--gn-num-groups GN_NUM_GROUPS]
                         DIR
 
 PyTorch ImageNet Training
@@ -80,7 +80,7 @@ positional arguments:
 
 optional arguments:
   -h, --help            show this help message and exit
-  --model_dir MODEL_DIR
+  --model-dir MODEL_DIR
                         dir to which model is saved (default: ./model_dir)
   -a ARCH, --arch ARCH  model architecture: conv1x1 | conv3x3 | resnet101 |
                         resnet152 | resnet18 | resnet34 | resnet50 |
@@ -91,10 +91,10 @@ optional arguments:
   -b N, --batch-size N  mini-batch size (default: 256)
   --lr LR, --learning-rate LR
                         initial learning rate (default: 0.1)
-  --lr_milestones LR_MILESTONES [LR_MILESTONES ...]
+  --lr-milestones LR_MILESTONES [LR_MILESTONES ...]
                         epochs at which we take a learning-rate step (default:
                         [30, 60, 80, 90])
-  --lr_multiplier M     lr multiplier at lr_milestones (default: 0.1)
+  --lr-multiplier M     lr multiplier at lr_milestones (default: 0.1)
   --momentum M          optimizer momentum (default: 0.9)
   --wd W, --weight-decay W
                         weight decay (default: 1e-4)
@@ -103,20 +103,19 @@ optional arguments:
   -e, --evaluate        evaluate model on validation set
   --pretrained          use pre-trained model
   --seed SEED           seed for initializing training
-  --norm_mode NORM      select normalization type. options: "batch" | "group"
-                        | "layer" | "instance" | "online" | "none". (default:
-                        batch)
-  --afwd AFWD, --decay_factor_forward AFWD
+  --norm-mode NORM      norm choices: batch | group | layer | instance |
+                        online | none (default: batch)
+  --afwd AFWD, --decay-factor-forward AFWD
                         forward decay factor which sets momentum process
                         hyperparameter when using online normalization
                         (default: 0.999)
-  --abkw ABKW, --decay_factor_backward ABKW
+  --abkw ABKW, --decay-factor-backward ABKW
                         backward decay factor which sets control process
                         hyperparameter when using online normalization
                         (default: 0.99)
-  --rm_layer_scaling    remove layer scaling in online normalization (default:
-                        False)
-  --gn_num_groups GN_NUM_GROUPS
+  --ecm ECM             Online Norm ErrorCheckingMechanism choices: ls | ac |
+                        none (default: ls)
+  --gn-num-groups GN_NUM_GROUPS
                         number of groups in group norm if using group norm as
                         normalization method (default: 32)
 ```
@@ -124,13 +123,13 @@ optional arguments:
 ### Cifar10 Usage
 
 ```
-usage: cifar10_main.py [-h] [--model_dir MODEL_DIR] [-d D] [-j N] [--epochs N]
+usage: cifar10_main.py [-h] [--model-dir MODEL_DIR] [-d D] [-j N] [--epochs N]
                        [--start-epoch N] [-b N] [--lr LR]
-                       [--lr_milestones LR_MILESTONES [LR_MILESTONES ...]]
-                       [--lr_multiplier M] [--momentum M] [--wd W] [-p N]
+                       [--lr-milestones LR_MILESTONES [LR_MILESTONES ...]]
+                       [--lr-multiplier M] [--momentum M] [--wd W] [-p N]
                        [--resume PATH] [-e] [--pretrained] [--seed SEED]
-                       [--norm_mode NORM] [--afwd AFWD] [--abkw ABKW]
-                       [--rm_layer_scaling] [--gn_num_groups GN_NUM_GROUPS]
+                       [--norm-mode NORM] [--afwd AFWD] [--abkw ABKW]
+                       [--ecm ECM] [--gn-num-groups GN_NUM_GROUPS]
                        DIR
 
 PyTorch ImageNet Training
@@ -140,7 +139,7 @@ positional arguments:
 
 optional arguments:
   -h, --help            show this help message and exit
-  --model_dir MODEL_DIR
+  --model-dir MODEL_DIR
                         dir to which model is saved (default: ./model_dir)
   -d D, --depth D       depth of ResNet (default: 20)
   -j N, --workers N     number of data loading workers (default: 4)
@@ -149,10 +148,10 @@ optional arguments:
   -b N, --batch-size N  mini-batch size (default: 128)
   --lr LR, --learning-rate LR
                         initial learning rate (default: 0.1)
-  --lr_milestones LR_MILESTONES [LR_MILESTONES ...]
+  --lr-milestones LR_MILESTONES [LR_MILESTONES ...]
                         epochs at which we take a learning-rate step (default:
                         [100, 150, 200])
-  --lr_multiplier M     lr multiplier at lr_milestones (default: 0.1)
+  --lr-multiplier M     lr multiplier at lr_milestones (default: 0.1)
   --momentum M          optimizer momentum (default: 0.9)
   --wd W, --weight-decay W
                         weight decay (default: 2e-4)
@@ -161,20 +160,19 @@ optional arguments:
   -e, --evaluate        evaluate model on validation set
   --pretrained          use pre-trained model
   --seed SEED           seed for initializing training
-  --norm_mode NORM      select normalization type. options: "batch" | "group"
-                        | "layer" | "instance" | "online" | "none". (default:
-                        batch)
-  --afwd AFWD, --decay_factor_forward AFWD
+  --norm-mode NORM      norm choices: batch | group | layer | instance |
+                        online | none (default: batch)
+  --afwd AFWD, --decay-factor-forward AFWD
                         forward decay factor which sets momentum process
                         hyperparameter when using online normalization
                         (default: 1023 / 1024)
-  --abkw ABKW, --decay_factor_backward ABKW
+  --abkw ABKW, --decay-factor-backward ABKW
                         backward decay factor which sets control process
                         hyperparameter when using online normalization
                         (default: 127 / 128)
-  --rm_layer_scaling    remove layer scaling in online normalization (default:
-                        False)
-  --gn_num_groups GN_NUM_GROUPS
+  --ecm ECM             Online Norm ErrorCheckingMechanism choices: ls | ac |
+                        none (default: ls)
+  --gn-num-groups GN_NUM_GROUPS
                         number of groups in group norm if using group norm as
                         normalization method (default: 8)
 ```
@@ -182,13 +180,13 @@ optional arguments:
 ### Cifar100 Usage
 
 ```
-usage: cifar100_main.py [-h] [--model_dir MODEL_DIR] [-d D] [-j N]
+usage: cifar100_main.py [-h] [--model-dir MODEL_DIR] [-d D] [-j N]
                         [--epochs N] [--start-epoch N] [-b N] [--lr LR]
-                        [--lr_milestones LR_MILESTONES [LR_MILESTONES ...]]
-                        [--lr_multiplier M] [--momentum M] [--wd W] [-p N]
+                        [--lr-milestones LR_MILESTONES [LR_MILESTONES ...]]
+                        [--lr-multiplier M] [--momentum M] [--wd W] [-p N]
                         [--resume PATH] [-e] [--pretrained] [--seed SEED]
-                        [--norm_mode NORM] [--afwd AFWD] [--abkw ABKW]
-                        [--rm_layer_scaling] [--gn_num_groups GN_NUM_GROUPS]
+                        [--norm-mode NORM] [--afwd AFWD] [--abkw ABKW]
+                        [--ecm ECM] [--gn-num-groups GN_NUM_GROUPS]
                         DIR
 
 PyTorch ImageNet Training
@@ -198,7 +196,7 @@ positional arguments:
 
 optional arguments:
   -h, --help            show this help message and exit
-  --model_dir MODEL_DIR
+  --model-dir MODEL_DIR
                         dir to which model is saved (default: ./model_dir)
   -d D, --depth D       depth of ResNet (default: 20)
   -j N, --workers N     number of data loading workers (default: 4)
@@ -207,10 +205,10 @@ optional arguments:
   -b N, --batch-size N  mini-batch size (default: 128)
   --lr LR, --learning-rate LR
                         initial learning rate (default: 0.1)
-  --lr_milestones LR_MILESTONES [LR_MILESTONES ...]
+  --lr-milestones LR_MILESTONES [LR_MILESTONES ...]
                         epochs at which we take a learning-rate step (default:
                         [100, 150, 200])
-  --lr_multiplier M     lr multiplier at lr_milestones (default: 0.1)
+  --lr-multiplier M     lr multiplier at lr_milestones (default: 0.1)
   --momentum M          optimizer momentum (default: 0.9)
   --wd W, --weight-decay W
                         weight decay (default: 2e-4)
@@ -219,20 +217,19 @@ optional arguments:
   -e, --evaluate        evaluate model on validation set
   --pretrained          use pre-trained model
   --seed SEED           seed for initializing training
-  --norm_mode NORM      select normalization type. options: "batch" | "group"
-                        | "layer" | "instance" | "online" | "none". (default:
-                        batch)
-  --afwd AFWD, --decay_factor_forward AFWD
+  --norm-mode NORM      norm choices: batch | group | layer | instance |
+                        online | none (default: batch)
+  --afwd AFWD, --decay-factor-forward AFWD
                         forward decay factor which sets momentum process
                         hyperparameter when using online normalization
                         (default: 511 / 512)
-  --abkw ABKW, --decay_factor_backward ABKW
+  --abkw ABKW, --decay-factor-backward ABKW
                         backward decay factor which sets control process
                         hyperparameter when using online normalization
                         (default: 15 / 16)
-  --rm_layer_scaling    remove layer scaling in online normalization (default:
-                        False)
-  --gn_num_groups GN_NUM_GROUPS
+  --ecm ECM             Online Norm ErrorCheckingMechanism choices: ls | ac |
+                        none (default: ls)
+  --gn-num-groups GN_NUM_GROUPS
                         number of groups in group norm if using group norm as
                         normalization method (default: 8)
 ```

@@ -1,5 +1,5 @@
 """
-Released under BSD 3-Clause License, 
+Released under BSD 3-Clause License,
 Modifications are Copyright (c) 2019 Cerebras, Inc.
 All rights reserved.
 """
@@ -22,14 +22,13 @@ import torch.utils.data
 import torch.utils.data.distributed
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
-
-import resnet as models
+import torchvision.models as models
 
 from online_norm_pytorch import OnlineNorm2D
 
 model_names = sorted(name for name in models.__dict__
     if name.islower() and not name.startswith("__")
-    and callable(models.__dict__[name]))
+    and callable(models.__dict__[name]) and 'resnet' in name.lower())
 
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
 parser.add_argument('data', metavar='DIR',
@@ -425,14 +424,13 @@ def accuracy(output, target, topk=(1,)):
         return res
 
 
-def online_norm(num_features, afwd=0.999, abkw=0.99, eps=1e-05,
-                weight=True, bias=True, ctrl_norm=None, layer_scaling=True,
-                b_size=args.batch_size, **kwargs):
+def online_norm(num_features, batch_size=args.batch_size,
+                alpha_fwd=0.999, alpha_bkw=0.99, eps=1e-05,
+                affine=True, ecm='ls', **kwargs):
     """ Function which instantiates Online Norm Layer """
-    return OnlineNorm2D(num_features, alpha_fwd=afwd, alpha_bkw=abkw, eps=eps,
-                        weight=weight, bias=bias, ctrl_norm=ctrl_norm,
-                        layer_scaling=layer_scaling,
-                        b_size=b_size, **kwargs)
+    return OnlineNorm2D(num_features, batch_size=batch_size,
+                 alpha_fwd=alpha_fwd, alpha_bkw=alpha_bkw, eps=eps,
+                 affine=affine, ecm=ecm, **kwargs)
 
 
 if __name__ == '__main__':

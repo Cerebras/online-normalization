@@ -1,5 +1,5 @@
 """
-Released under BSD 3-Clause License, 
+Released under BSD 3-Clause License,
 Modifications are Copyright (c) 2019 Cerebras, Inc.
 All rights reserved.
 """
@@ -144,10 +144,11 @@ class NormLSTMCell(nn.RNNCellBase):
     If norm[0].lower() == 'o' online normalization is selected
     Online normalization implementation is based on:
 
-        <Paper Link>
+        https://papers.nips.cc/paper/9051-online-normalization-for-training-neural-networks
 
-    "Online Norm"
-    <Authors>
+    "Online Normalization for Training Neural Networks"
+    Vitaliy Chiley, Ilya Sharapov, Atli Kosson, Urs Koster, Ryan Reece,
+    Sofia Samaniego de la Fuente, Vishal Subbiah, Michael James
     """
 
     def __init__(self, input_size, hidden_size, bias=True,
@@ -168,16 +169,12 @@ class NormLSTMCell(nn.RNNCellBase):
             warnings.warn('Using Layer Norm in LSTMCell')
             self.norms = [nn.LayerNorm(hidden_size) for _ in range(num_norms)]
         elif norm[0].lower() == 'o':
-            if kwargs['b_size'] == 1:
-                warnings.warn('Using BatchSize=1 Online Norm in LSTMCell')
-                self.norms = [OnlineNorm1D(hidden_size,
-                                           cn=ControlNorm1DLoop(4 * hidden_size,
-                                                                **kwargs),
-                                           **kwargs) for _ in range(num_norms)]
-            else:
-                warnings.warn('Using Online Norm in LSTMCell')
-                self.norms = [OnlineNorm1D(hidden_size,
-                                           **kwargs) for _ in range(num_norms)]
+            warnings.warn('Using Online Norm in LSTMCell')
+            self.norms = [
+                OnlineNorm1D(hidden_size, batch_size=kwargs['batch_size'],
+                             alpha_fwd=kwargs['alpha_fwd'],
+                             alpha_bkw=kwargs['alpha_bkw'], 
+                             ecm=kwargs['ecm']) for _ in range(num_norms)]
 
         self.reset_norm_parameters()
         self.set_norm_modules()
@@ -259,7 +256,7 @@ class LSTM(nn.Module):
                                               bias=bias, **kwargs)]
 
         # cache all subsequent layers
-        for lstm_idx in range(1, num_layers):
+        for _ in range(1, num_layers):
             if norm:
                 self.lstm_cells += [NormLSTMCell(input_size=hidden_size,
                                                  hidden_size=hidden_size,
@@ -281,7 +278,7 @@ class LSTM(nn.Module):
         out = []
         if hx is not None:
             h, c = hx[0], hx[1]
-        for t, input_t in enumerate(input):
+        for input_t in input:
             h[0], c[0] = self.lstm_cells[0](input_t, (h[0], c[0]))
             if self.num_layers - 1:
                 h[0] = F.dropout(h[0], p=self.dropout, training=self.training)
@@ -294,4 +291,3 @@ class LSTM(nn.Module):
             out += [h[-1]]
         out = torch.stack(out)
         return out, (h, c)
-

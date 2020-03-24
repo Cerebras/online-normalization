@@ -1,5 +1,5 @@
 """
-Released under BSD 3-Clause License, 
+Released under BSD 3-Clause License,
 Modifications are Copyright (c) 2019 Cerebras, Inc.
 All rights reserved.
 """
@@ -20,7 +20,7 @@ NUM_CLASSES = 10
 parser = argparse.ArgumentParser(description='PyTorch FashionMNIST Training')
 parser.add_argument('data', metavar='DIR',
                     help='path to dataset')
-parser.add_argument('--model_dir', type=str, default='./model_dir',
+parser.add_argument('--model-dir', type=str, default='./model_dir',
                     help='dir to which model is saved (default: ./model_dir)')
 parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
                     help='number of data loading workers (default: 4)')
@@ -47,22 +47,28 @@ parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                     help='evaluate model on validation set')
 parser.add_argument('--seed', default=None, type=int,
                     help='seed for initializing training')
-parser.add_argument('--norm_mode', default='batch', type=str,
-                    metavar='NORM',
-                    help='select normalization type. options: "batch" | '
-                         '"layer" | "online" | "none". (default: batch)')
-parser.add_argument('--afwd', '--decay_factor_forward', default=0.999,
+norm_choices=['batch', 'layer', 'online', 'none']
+parser.add_argument('--norm-mode', default='batch', type=str,
+                    metavar='NORM', choices=norm_choices,
+                    help='norm choices: ' +
+                        ' | '.join(norm_choices) +
+                        ' (default: batch)')
+parser.add_argument('--afwd', '--decay-factor-forward', default=0.999,
                     type=float, metavar='AFWD', dest='afwd',
                     help='forward decay factor which sets momentum process '
                          'hyperparameter when using online normalization '
                          '(default: 0.999)')
-parser.add_argument('--abkw', '--decay_factor_backward', default=0.99,
+parser.add_argument('--abkw', '--decay-factor-backward', default=0.99,
                     type=float, metavar='ABKW', dest='abkw',
                     help='backward decay factor which sets control process '
                          'hyperparameter when using online normalization '
                          '(default: 0.99)')
-parser.add_argument('--rm_layer_scaling', action='store_true',
-                    help='remove layer scaling in online normalization')
+ecm_choices=['ls', 'ac', 'none']
+parser.add_argument('--ecm', default='ls', type=str,
+                    metavar='ECM', choices=ecm_choices,
+                    help='Online Norm ErrorCheckingMechanism choices: ' +
+                        ' | '.join(ecm_choices) +
+                        ' (default: ls)')
 args = parser.parse_args()
 
 
@@ -78,11 +84,9 @@ def main(args):
                       'from checkpoints.')
 
     # Data loading code
-    traindir = os.path.join(args.data, 'train')
-    valdir = os.path.join(args.data, 'val')
     print('=> creating training set...')
     train_transform = transforms.Compose([transforms.ToTensor()])
-    train_dataset = datasets.FashionMNIST(traindir, train=True,
+    train_dataset = datasets.FashionMNIST(args.data, train=True,
                                           transform=train_transform,
                                           target_transform=None,
                                           download=True)
@@ -96,7 +100,7 @@ def main(args):
 
     print('=> creating validation set...')
     val_transform = transforms.Compose([transforms.ToTensor()])
-    val_dataset = datasets.FashionMNIST(valdir, train=False,
+    val_dataset = datasets.FashionMNIST(args.data, train=False,
                                         transform=val_transform,
                                         target_transform=None,
                                         download=True)

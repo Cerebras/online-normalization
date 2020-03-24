@@ -28,10 +28,10 @@ python fmnist_main.py [fmnist folder]
 
 The following bash commands will reproduce the experimental results:
 ```bash
-python fmnist_main.py --model_dir /path/to/cache/model --norm_mode online --afwd 0.999 --abkw 0.99
-python fmnist_main.py --model_dir /path/to/cache/model --norm_mode batch
-python fmnist_main.py --model_dir /path/to/cache/model --norm_mode layer
-python fmnist_main.py --model_dir /path/to/cache/model --norm_mode none
+python fmnist_main.py --model-dir /path/to/cache/model --norm-mode online --afwd 0.999 --abkw 0.99
+python fmnist_main.py --model-dir /path/to/cache/model --norm-mode batch
+python fmnist_main.py --model-dir /path/to/cache/model --norm-mode layer
+python fmnist_main.py --model-dir /path/to/cache/model --norm-mode none
 ```
 For our experimentation, each setting is run 400 times. 
 The mean of 400 runs is reported.
@@ -40,11 +40,11 @@ The mean of 400 runs is reported.
 ## Usage
 
 ```
-usage: fmnist_main.py [-h] [--model_dir MODEL_DIR] [-j N] [--epochs N]
+usage: fmnist_main.py [-h] [--model-dir MODEL_DIR] [-j N] [--epochs N]
                       [--start-epoch N] [-b N] [--lr LR] [--momentum M]
                       [--wd W] [-p N] [--resume PATH] [-e] [--seed SEED]
-                      [--norm_mode NORM] [--afwd AFWD] [--abkw ABKW]
-                      [--rm_layer_scaling]
+                      [--norm-mode NORM] [--afwd AFWD] [--abkw ABKW]
+                      [--ecm ECM]
                       DIR
 
 PyTorch FashionMNIST Training
@@ -54,7 +54,7 @@ positional arguments:
 
 optional arguments:
   -h, --help            show this help message and exit
-  --model_dir MODEL_DIR
+  --model-dir MODEL_DIR
                         dir to which model is saved (default: ./model_dir)
   -j N, --workers N     number of data loading workers (default: 4)
   --epochs N            number of total epochs to run (default: 10)
@@ -69,15 +69,16 @@ optional arguments:
   --resume PATH         path to latest checkpoint (default: none)
   -e, --evaluate        evaluate model on validation set
   --seed SEED           seed for initializing training
-  --norm_mode NORM      select normalization type. options: "batch" | "layer"
-                        | "online" | "none". (default: batch)
-  --afwd AFWD, --decay_factor_forward AFWD
+  --norm-mode NORM      norm choices: batch | layer | online | none (default:
+                        batch)
+  --afwd AFWD, --decay-factor-forward AFWD
                         forward decay factor which sets momentum process
                         hyperparameter when using online normalization
                         (default: 0.999)
-  --abkw ABKW, --decay_factor_backward ABKW
+  --abkw ABKW, --decay-factor-backward ABKW
                         backward decay factor which sets control process
                         hyperparameter when using online normalization
                         (default: 0.99)
-  --rm_layer_scaling    remove layer scaling in online normalization
+  --ecm ECM             Online Norm ErrorCheckingMechanism choices: ls | ac |
+                        none (default: ls)
 ```

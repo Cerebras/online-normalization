@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Released under BSD 3-Clause License, 
+Released under BSD 3-Clause License,
 Copyright (c) 2019 Cerebras Systems Inc.
 All rights reserved.
 
@@ -14,42 +14,84 @@ import torch.nn as nn
 
 
 class LayerScaling1D(nn.Module):
-    r"""Scales inputs by the second moment for the entire layer.
+    r"""Scales inputs by the root of the second moment for groups.
+    
     .. math::
-
-        y = \frac{x}{\sqrt{\mathrm{E}[x^2] + \epsilon}}
-
+        y_g = \frac{x_g}{\sqrt{\mathrm{E}[x_g^2] + \epsilon}}
+    
     Args:
+        group_size: size of groups
+            Default: -1 (no grouping, use all channels)
         eps: a value added to the denominator for numerical stability.
             Default: 1e-5
+    
+    Shape:
+        - Input: :math:`(N, C)`
+        - Output: :math:`(N, C)` (same shape as input)
+    
+    Examples::
+    
+        >>> ls = LayerScaling1D()
+        >>> input = torch.randn(64, 128)
+        >>> output = ls(input)
+    """
+    def __init__(self, group_size=-1, eps=1e-5):
+        super(LayerScaling1D, self).__init__()
+        self.eps = eps
+        self.group_size = group_size
+
+    def extra_repr(self):
+        s = (f'eps={self.eps}, group_size={self.group_size}')
+        return s
+
+    def forward(self, input):
+        shape = input.shape
+        self.group_size = shape[1] if self.group_size == -1 else self.group_size
+        tmp = input.view(
+            shape[0],
+            shape[1] // self.group_size,
+            self.group_size
+        )
+        moment2 = torch.mean(tmp * tmp, dim=[2], keepdim=True)
+        out = tmp / torch.sqrt(moment2 + self.eps)
+        out = out.view(shape)
+
+        return out
+
+
+class ActivationClamp(nn.Module):
+    r"""Clips the output of CN.
+
+    .. math::
+        y = clip(x, -clamp_value, clamp_value)
+
+    Args:
+        clamp_value: the value to which activations are clipped.
+            Default: 5
 
     Shape:
-        - Input: :math:`(N, L)`
-        - Output: :math:`(N, L)` (same shape as input)
+        - Input: :math:`(N, C)`
+        - Output: :math:`(N, C)` (same shape as input)
 
     Examples::
 
-        >>> ls = LayerScaling()
-        >>> input = torch.randn(20, 100)
-        >>> output = ls(input)
-
+        >>> ac = ActivationClamp(clamp_value)
+        >>> input = torch.randn(64, 128)
+        >>> output = ac(input)
     """
-    def __init__(self, eps=1e-5, **kwargs):
-        super(LayerScaling1D, self).__init__()
-        self.eps = eps
+    def __init__(self, clamp_value=5):
+        super(ActivationClamp, self).__init__()
+        self.clamp_value = clamp_value
 
     def extra_repr(self):
-        return f'eps={self.eps}'
+        return f'clamp_value={self.clamp_value}'
 
     def forward(self, input):
-        # calculate second moment
-        moment2 = torch.mean(input * input, dim=1, keepdim=True)
-        # divide out second moment
-        return input / torch.sqrt(moment2 + self.eps)
+        return torch.clamp(input, -self.clamp_value, self.clamp_value)
 
 
-class ControlNorm1DLoop(nn.Module):
-    r"""Applies Control Normalization (the per feature exponential moving
+class Norm1D(nn.Module):
+    r"""Applies Normalization (the per feature exponential moving
     average, ema, forward and control process backward part of the Online
     Normalization algorithm) over a 2D input (a mini-batch of 1D inputs) as
     described in the paper:
@@ -58,20 +100,23 @@ class ControlNorm1DLoop(nn.Module):
     .. math::
         y_t = \frac{x_t - \mu_{t-1}}{\sqrt{\sigma^2_{t-1} + \epsilon}}
 
-        \sigma^2_t = \alpha_fwd * \sigma^2_{t-1} + \alpha_fwd * (1 - \alpha_fwd) * (x_t - \mu_{t-1}) ^ 2
+        \sigma^2_t = (
+            \alpha_fwd * \sigma^2_{t-1} +
+            \alpha_fwd * (1 - \alpha_fwd) * (x_t - \mu_{t-1}) ^ 2
+        )
         \mu_t = \alpha_fwd * \mu_{t-1} + (1 - \alpha_fwd) * x_t
 
     The mean and standard-deviation are estimated per-feature
 
     Args:
         num_features: :math:`L` from an expected input of size :math:`(N, L)`
-        eps: a value added to the denominator for numerical stability.
-            Default: 1e-5
         alpha_fwd: the decay factor to be used in fprop to update statistics.
             Default: 0.999
         alpha_bkw: the decay factor to be used in fprop to control the gradients
             propagating through the network.
             Default: 0.99
+        eps: a value added to the denominator for numerical stability.
+            Default: 1e-5
 
     Shape:
         - Input: :math:`(N, L)`
@@ -79,7 +124,7 @@ class ControlNorm1DLoop(nn.Module):
 
     Examples::
 
-        >>> norm = ControlNorm1DLoop(100, 0.999, 0.99)
+        >>> norm = Norm1D(100, 0.999, 0.99)
         >>> input = torch.randn(20, 100)
         >>> output = norm(input)
     """
@@ -87,8 +132,8 @@ class ControlNorm1DLoop(nn.Module):
     __constants__ = ['m', 'var', 'u', 'v', 'afwd', 'abkw', 'eps']
 
     def __init__(self, num_features,
-                 alpha_fwd=0.999, alpha_bkw=0.99, eps=1e-05, **kwargs):
-        super(ControlNorm1DLoop, self).__init__()
+                 alpha_fwd=0.999, alpha_bkw=0.99, eps=1e-05):
+        super(Norm1D, self).__init__()
         self.num_features = num_features
         self.eps = eps
 
@@ -104,7 +149,7 @@ class ControlNorm1DLoop(nn.Module):
         self.register_buffer('v', torch.zeros([num_features]))
         self.init_norm_params()
 
-        class ControlNormalization(torch.autograd.Function):
+        class Normalization(torch.autograd.Function):
             @staticmethod
             def forward(ctx, input):
                 afwd = self.afwd
@@ -151,7 +196,7 @@ class ControlNorm1DLoop(nn.Module):
 
                 return grad_in
 
-        self.normalizer = ControlNormalization.apply
+        self.normalizer = Normalization.apply
 
     def init_norm_params(self):
         nn.init.constant_(self.m, 0)
@@ -160,14 +205,16 @@ class ControlNorm1DLoop(nn.Module):
         nn.init.constant_(self.v, 0)
 
     def extra_repr(self):
-        s = (f'num_features={self.num_features}, afwd={self.afwd}, '
-             f'abkw={self.abkw}, eps={self.eps}')
+        s = (f'num_features={self.num_features}, '
+             f'afwd={self.afwd}, abkw={self.abkw}, eps={self.eps}')
         return s
 
     def forward(self, input):
         if self.training:
             return self.normalizer(input)
-        return (input - self.m) / torch.sqrt(self.var + self.eps)
+        mu = self.m.unsqueeze(0)
+        var = self.var.unsqueeze(0)
+        return (input - mu) / torch.sqrt(var + self.eps)
 
 
 def lin_momentum(mu_prev, mu_curr, mu_stream,
@@ -240,20 +287,16 @@ def lin_crtl(delta, out, b_size, num_features, v_p, alpha_p, beta_p,
     alpha2log = torch.log(torch.cat((alpha_p, alpha), 0))
     beta2 = torch.cat((beta_p, beta), 0)
 
-    alpha2logcir = alpha2log.repeat(2 * b_size + 1, 1).view(2 * b_size,
-                                                            2 * b_size + 1,
-                                                            num_features)[1:b_size + 1,
-                                                                          :b_size]
+    alpha2logcir = alpha2log.repeat(2 * b_size + 1, 1).view(
+        2 * b_size, 2 * b_size + 1, num_features)[1:b_size + 1, :b_size]
 
     alpha2logcir2 = torch.cat((alpha2logcir,
                                torch.zeros_like(alpha2logcir)), 1)
     alpha2logcir2conv = conv_alongb_w1(alpha2logcir2, b_size, num_features)
     weight_d = torch.exp(alpha2logcir2conv)
 
-    beta2cir = beta2.repeat(2 * b_size + 1, 1).view(2 * b_size,
-                                                    2 * b_size + 1,
-                                                    num_features)[1:b_size + 1,
-                                                                  :b_size]
+    beta2cir = beta2.repeat(2 * b_size + 1, 1).view(
+        2 * b_size, 2 * b_size + 1, num_features)[1:b_size + 1, :b_size]
 
     v_prev = torch.cat((v_p.reshape(b_size, 1, num_features), beta2cir), 1)
 
@@ -264,11 +307,16 @@ def lin_crtl(delta, out, b_size, num_features, v_p, alpha_p, beta_p,
 
     vp = torch.cat((v_p[-1].unsqueeze(0), v_new[:-1]), 0)
 
-    return delta - vp.view(b_size, num_features) * (1 - abkw) * out, v_new, alpha_p, beta_p
+    return (
+        delta - vp.view(b_size, num_features) * (1 - abkw) * out,
+        v_new,
+        alpha_p,
+        beta_p
+    )
 
 
-class ControlNorm1D(nn.Module):
-    r"""Applies Control Normalization (the per feature exponential moving
+class Norm1DBatched(nn.Module):
+    r"""Applies Normalization (the per feature exponential moving
     average, ema, forward and control process backward part of the Online
     Normalization algorithm) over a 2D input (a mini-batch of 1D inputs) as
     described in the paper:
@@ -279,7 +327,10 @@ class ControlNorm1D(nn.Module):
     .. math::
         y_t = \frac{x_t - \mu_{t-1}}{\sqrt{\sigma^2_{t-1} + \epsilon}}
 
-        \sigma^2_t = \alpha_fwd * \sigma^2_{t-1} + \alpha_fwd * (1 - \alpha_fwd) * (x_t - \mu_{t-1}) ^ 2
+        \sigma^2_t = (
+            \alpha_fwd * \sigma^2_{t-1} +
+            \alpha_fwd * (1 - \alpha_fwd) * (x_t - \mu_{t-1}) ^ 2
+        )
         \mu_t = \alpha_fwd * \mu_{t-1} + (1 - \alpha_fwd) * x_t
 
     The mean and standard-deviation are estimated per-feature.
@@ -291,15 +342,15 @@ class ControlNorm1D(nn.Module):
 
     Args:
         num_features: :math:`L` from an expected input of size :math:`(N, L)`
-        eps: a value added to the denominator for numerical stability.
-            Default: 1e-5
+        batch_size (N): in order to speed up computation we need to know and fix
+            the batch size a priori.
         alpha_fwd: the decay factor to be used in fprop to update statistics.
             Default: 0.999
         alpha_bkw: the decay factor to be used in fprop to control the gradients
             propagating through the network.
             Default: 0.99
-        b_size (N): in order to speed up computation we need to know and fix the
-            batch size a priori.
+        eps: a value added to the denominator for numerical stability.
+            Default: 1e-5
 
     Shape:
         - Input: :math:`(N, L)`
@@ -307,21 +358,22 @@ class ControlNorm1D(nn.Module):
 
     Examples::
 
-        >>> norm = ControlNorm1DLoop(100, 0.999, 0.99)
-        >>> input = torch.randn(20, 100)
+        >>> B, C = 32, 256
+        >>> norm = Norm1DBatched(C, B, 0.999, 0.99)
+        >>> input = torch.randn(B, C)
         >>> output = norm(input)
     """
     __constants__ = ['m', 'var', 'u', 'v', 'm_p', 'var_p', 'u_p', 'v_p',
                      'beta_p', 'alpha_p', 'afwd', 'abkw', 'eps']
 
-    def __init__(self, num_features, alpha_fwd=0.999, alpha_bkw=0.99,
-                 eps=1e-05, b_size=None, **kwargs):
-        super(ControlNorm1D, self).__init__()
-        assert isinstance(b_size, int), 'b_size must be an integer'
-        assert b_size > 0, 'b_size must be greater than 0'
+    def __init__(self, num_features, batch_size,
+                 alpha_fwd=0.999, alpha_bkw=0.99, eps=1e-05):
+        super(Norm1DBatched, self).__init__()
+        assert isinstance(batch_size, int), 'batch_size must be an integer'
+        assert batch_size > 0, 'batch_size must be greater than 0'
         self.num_features = num_features
+        self.batch_size = batch_size
         self.eps = eps
-        self.b_size = b_size
 
         self.afwd = alpha_fwd
         self.abkw = alpha_bkw
@@ -335,31 +387,31 @@ class ControlNorm1D(nn.Module):
         self.ab_batch = None
 
         # self.m and self.var are the streaming mean and variance respectively
-        self.register_buffer('m', torch.zeros([b_size, num_features]))
-        self.register_buffer('var', torch.ones([b_size, num_features]))
-        self.register_buffer('m_p', torch.zeros([b_size, num_features]))
-        self.register_buffer('var_p', torch.ones([b_size, num_features]))
+        self.register_buffer('m', torch.zeros([batch_size, num_features]))
+        self.register_buffer('var', torch.ones([batch_size, num_features]))
+        self.register_buffer('m_p', torch.zeros([batch_size, num_features]))
+        self.register_buffer('var_p', torch.ones([batch_size, num_features]))
 
         # self.u and self.v are the control variables respectively
-        self.register_buffer('u', torch.zeros([b_size, num_features]))
-        self.register_buffer('u_p', torch.zeros([b_size, num_features]))
-        self.register_buffer('v_p', torch.zeros([b_size, num_features]))
-        self.register_buffer('beta_p', torch.zeros([b_size, num_features]))
-        self.register_buffer('alpha_p', torch.ones([b_size, num_features]))
+        self.register_buffer('u', torch.zeros([batch_size, num_features]))
+        self.register_buffer('u_p', torch.zeros([batch_size, num_features]))
+        self.register_buffer('v_p', torch.zeros([batch_size, num_features]))
+        self.register_buffer('beta_p', torch.zeros([batch_size, num_features]))
+        self.register_buffer('alpha_p', torch.ones([batch_size, num_features]))
         self.init_norm_params()
 
-        class ControlNormalization(torch.autograd.Function):
+        class Normalization(torch.autograd.Function):
             @staticmethod
             def forward(ctx, input):
 
                 if self.af_pow is None:
-                    range_b = torch.arange(self.b_size - 1, -1, -1).type(input.type())
+                    range_b = torch.arange(self.batch_size - 1, -1, -1).type(input.type())
                     self.af_pow = (self.afwd ** range_b).view(1, 1, -1)
-                    self.af_batch = input.new_full((self.b_size, num_features),
-                                                   self.afwd ** self.b_size)
+                    self.af_batch = input.new_full((self.batch_size, num_features),
+                                                   self.afwd ** self.batch_size)
                     self.ab_pow = (self.abkw ** range_b).view(1, 1, -1)
-                    self.ab_batch = input.new_full((self.b_size, num_features),
-                                                   self.abkw ** self.b_size)
+                    self.ab_batch = input.new_full((self.batch_size, num_features),
+                                                   self.abkw ** self.batch_size)
 
                 momentum = self.afwd
                 momentum_pow = self.af_pow
@@ -391,7 +443,7 @@ class ControlNorm1D(nn.Module):
 
                 # v controller
                 lin_ctrl_out = lin_crtl(grad_in, out,
-                                        self.b_size, self.num_features,
+                                        self.batch_size, self.num_features,
                                         self.v_p, self.alpha_p, self.beta_p,
                                         abkw=self.abkw, eps=1e-5)
 
@@ -409,7 +461,7 @@ class ControlNorm1D(nn.Module):
 
                 return grad_delta
 
-        self.normalizer = ControlNormalization.apply
+        self.normalizer = Normalization.apply
 
     def init_norm_params(self):
         nn.init.constant_(self.m, 0)
@@ -424,16 +476,16 @@ class ControlNorm1D(nn.Module):
         nn.init.constant_(self.alpha_p, 1)
 
     def extra_repr(self):
-        s = (f'num_features={self.num_features}, afwd={self.afwd}, '
-             f'abkw={self.abkw}, eps={self.eps}')
+        s = (f'num_features={self.num_features}, batch_size={self.batch_size}, '
+             f'afwd={self.afwd}, abkw={self.abkw}, eps={self.eps}')
         return s
 
     def forward(self, input):
         if self.training:
             return self.normalizer(input)
         mu = self.m[-1].unsqueeze(0)
-        stddev = torch.sqrt(self.var[-1].unsqueeze(0) + self.eps)
-        return (input - mu) / stddev
+        var = self.var[-1].unsqueeze(0)
+        return (input - mu) / torch.sqrt(var + self.eps)
 
 
 class OnlineNorm1D(nn.Module):
@@ -442,28 +494,27 @@ class OnlineNorm1D(nn.Module):
     `Online Normalization for Training Neural Networks`.
 
     .. math::
-        y_t = LayerScaling1D(ControlNorm1D(x_t) * \gamma + \beta)
+        y_t = LayerScaling1D(Norm1D(x_t) * \gamma + \beta)
 
     Args:
         num_features: :math:`L` from an expected input of size :math:`(N, L)`
-        eps: a value added to the denominator for numerical stability.
-            Default: 1e-5
+        batch_size: in order to speed up computation we need to know and fix the
+            batch size a priori.
         alpha_fwd: the decay factor to be used in fprop to update statistics.
             Default: 0.999
         alpha_bkw: the decay factor to be used in fprop to control the gradients
-            propagating through the network.
-            Default: 0.99
-        b_size: in order to speed up computation we need to know and fix the
-            batch size a priori.
-        weight: a boolean value that when set to ``True``, this module has
-            learnable linear parameters. Default: ``True``
-        bias: a boolean value that when set to ``True``, this module has
-            learnable bias parameters. Default: ``True``
-        ctrl_norm: control norm object layer. If None ControlNorm1D is selected.
-            Use if you want to select ``ControlNorm1DLoop``
-            Default: None
-        layer_scaling: a boolean value that when set to ``True``, this module has
-            layer scaling at the end. Default: ``True``
+            propagating through the network. Default: 0.99
+        eps: a value added to the denominator for numerical stability.
+            Default: 1e-5
+        affine: a boolean value that when set to ``True``, this module has
+            learnable affine parameters (weight & bias). Default: ``True``
+        ecm: a string which defines the error checking mechanism in OnlineNorm.
+            Choice: `ac` (Activation Clamping) | `ls` (Layer Scaling).
+        ls_eps: if ecm is `ls`, this is the `ls` eps.
+        clamp_val: if ecm is `ac` this is the clamp value.
+        batch_acceleration: enable batch accelerated variant of norm. Requires
+            knowing the batch size apriori. Automatically diabled if batch size
+            is 1 or None. Default: True
 
     Shape:
         - Input: :math:`(N, L)`
@@ -472,64 +523,75 @@ class OnlineNorm1D(nn.Module):
     Examples::
 
         >>> # With Learnable Parameters
-        >>> norm = OnlineNorm1D(100, 0.999, 0.99)
+        >>> norm = OnlineNorm1D(128, batch_size=64)
         >>> # Without Learnable Parameters
-        >>> norm = OnlineNorm1D(100, 0.999, 0.99, weight=False, bias=False)
-        >>> # With ControlNorm1DLoop
-        >>> norm = OnlineNorm1D(100, ctrl_norm=ControlNorm1DLoop(100,
-                                                                 1024, 256))
-        >>> input = torch.randn(20, 100)
+        >>> norm = OnlineNorm1D(128, batch_size=64, affine=False)
+        >>> # With Norm1D with loops
+        >>> norm = OnlineNorm1D(128)
+        >>> input = torch.randn(64, 128)
         >>> output = norm(input)
     """
     __constants__ = ['weight', 'bias']
 
-    def __init__(self, num_features, alpha_fwd=0.999, alpha_bkw=0.99,
-                 eps=1e-05, weight=True, bias=True, ctrl_norm=None,
-                 layer_scaling=True, **kwargs):
+    def __init__(self, num_features, batch_size=None,
+                 alpha_fwd=0.999, alpha_bkw=0.99, eps=1e-05,
+                 affine=True, ecm='ac', ls_eps=1e-05, clamp_val=5,
+                 batch_acceleration=True, **kwargs):
         super(OnlineNorm1D, self).__init__()
         self.num_features = num_features
 
-        if ctrl_norm is not None:
-            assert isinstance(ctrl_norm, (ControlNorm1DLoop,
-                                      ControlNorm1D))
-            self.ctrl_norm = ctrl_norm
-        else:
-            self.ctrl_norm = ControlNorm1D(num_features,
-                                           alpha_fwd=alpha_fwd,
-                                           alpha_bkw=alpha_bkw,
-                                           eps=eps, **kwargs)
+        if batch_size is None or batch_size == 1:
+            batch_acceleration = False
 
-        if layer_scaling:
-            self.layer_scaling = LayerScaling1D(eps=eps, **kwargs)
-            warnings.warn('Using LS in Online Normalization')
+        if batch_acceleration:
+            self.norm = Norm1DBatched(num_features, batch_size,
+                                      alpha_fwd=alpha_fwd,
+                                      alpha_bkw=alpha_bkw,
+                                      eps=eps)
         else:
-            warnings.warn('Not using LS in Online Normalization')
-        self.ls_op = layer_scaling
+            warnings.warn(
+                'Running looped variant of OnlineNorm, '
+                'if using batched training, '
+                'pass batch_size paramter to accelerate training.'
+            )
+            self.norm = Norm1D(num_features,
+                               alpha_fwd=alpha_fwd,
+                               alpha_bkw=alpha_bkw,
+                               eps=eps)
 
-        if weight:
+        if ecm.lower() == 'ls':
+            self.ecm = LayerScaling1D(eps=ls_eps, **kwargs)
+            warnings.warn('Using LayerScaling in Online Normalization')
+        elif ecm.lower() == 'ac':
+            self.ecm = ActivationClamp(clamp_val)
+            warnings.warn('Using ActivationClamping in Online Normalization')
+        else:
+            warnings.warn(
+                'No guards on statistical estimates of OnlineNorm,'
+                'possible options: ls | ac'
+            )
+            self.ecm = None
+
+        if affine:
             self.weight = nn.Parameter(torch.ones([num_features]),
                                        requires_grad=True)
-        else:
-            self.register_parameter('weight', None)
-        if bias:
             self.bias = nn.Parameter(torch.zeros([num_features]),
                                      requires_grad=True)
         else:
+            self.register_parameter('weight', None)
             self.register_parameter('bias', None)
 
     def extra_repr(self):
-        return (f'num_features={self.num_features}, '
-                f'weight={self.weight is not None}, '
-                f'bias={self.bias is not None}')
+        return f'weight={self.weight is not None}, bias={self.bias is not None}'
 
     def forward(self, input):
-        # apply control norm
-        out = self.ctrl_norm(input)
+        # apply norm
+        out = self.norm(input)
         # scale output
         if self.weight is not None:
             out = out * self.weight.unsqueeze(0)
         # add bias
         if self.bias is not None:
             out = out + self.bias.unsqueeze(0)
-        # apply layer scaling
-        return self.layer_scaling(out) if self.ls_op else out
+        # guard for numerical stability of statistical estimates in OnlineNorm
+        return self.ecm(out) if self.ecm is not None else out

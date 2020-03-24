@@ -1,5 +1,5 @@
 """
-Released under BSD 3-Clause License, 
+Released under BSD 3-Clause License,
 Modifications are Copyright (c) 2019 Cerebras, Inc.
 All rights reserved.
 """
@@ -10,7 +10,6 @@ import shutil
 import torch
 from torch import nn
 from torch.backends import cudnn
-from torch.optim.lr_scheduler import MultiStepLR
 
 from model.model import MLP_Model
 from model.norm import norm as norm_layer
@@ -26,8 +25,8 @@ def main_worker(train_loader, val_loader, num_classes, args):
     norm_kwargs = {'mode': args.norm_mode,
                    'alpha_fwd': args.afwd,
                    'alpha_bkw': args.abkw,
-                   'b_size': args.batch_size,
-                   'layer_scaling': not args.rm_layer_scaling}
+                   'batch_size': args.batch_size,
+                   'ecm': args.ecm}
 
     # create model
     print('=> creating mlp model...')
@@ -78,7 +77,7 @@ def main_worker(train_loader, val_loader, num_classes, args):
             'epoch': epoch + 1,
             'state_dict': model.state_dict(),
             'best_acc1': best_acc1,
-            'optimizer' : optimizer.state_dict(),
+            'optimizer': optimizer.state_dict(),
         }, is_best, args)
 
 

@@ -1,5 +1,5 @@
 """
-Released under BSD 3-Clause License, 
+Released under BSD 3-Clause License,
 Modifications are Copyright (c) 2019 Cerebras, Inc.
 All rights reserved.
 """
@@ -97,15 +97,12 @@ class RNNCell(nn.RNNCellBase):
             self.norm = nn.LayerNorm(hidden_size)
             self.reset_norm_parameters()
         elif norm == 'online_norm':
-            if kwargs['b_size'] == 1:
-                warnings.warn('Using OnlineNorm (batch size 1)')
-                self.norm = OnlineNorm1D(hidden_size,
-                                         cn=ControlNorm1DLoop(hidden_size,
-                                                              **kwargs),
-                                         **kwargs)
-            else:
-                warnings.warn('RNN Using OnlineNorm')
-                self.norm = OnlineNorm1D(hidden_size, **kwargs)
+            warnings.warn('RNN Using OnlineNorm')
+            self.norm = OnlineNorm1D(
+                hidden_size, batch_size=kwargs['batch_size'],
+                alpha_fwd=kwargs['alpha_fwd'], alpha_bkw=kwargs['alpha_bkw'], 
+                ecm=kwargs['ecm']
+            )
             self.reset_norm_parameters()
         elif norm == 'none':
             warnings.warn('RNN Not Using A Norm')
@@ -187,7 +184,7 @@ class RNN(nn.Module):
 
     def forward(self, input, hidden):
         out = []
-        for t, input_t in enumerate(input):
+        for input_t in input:
             hidden[0] = self.rnn_cells[0](input_t, hidden[0])
             if self.num_layers - 1:
                 hidden[0] = F.dropout(hidden[0], p=self.dropout,
