@@ -1,5 +1,5 @@
 """
-Released under BSD 3-Clause License, 
+Released under BSD 3-Clause License,
 Modifications are Copyright (c) 2019 Cerebras, Inc.
 All rights reserved.
 """
@@ -29,8 +29,8 @@ def main_worker(train_loader, val_loader, num_classes, args, cifar=False):
     norm_kwargs = {'mode': args.norm_mode,
                    'alpha_fwd': args.afwd,
                    'alpha_bkw': args.abkw,
-                   'b_size': args.batch_size,
-                   'layer_scaling': not args.rm_layer_scaling,
+                   'batch_size': args.batch_size,
+                   'ecm': args.ecm,
                    'gn_num_groups': args.gn_num_groups}
     model_kwargs = {'num_classes': num_classes,
                     'norm_layer': norm_layer,
@@ -75,6 +75,7 @@ def main_worker(train_loader, val_loader, num_classes, args, cifar=False):
             best_acc1 = checkpoint['best_acc1']
             model.load_state_dict(checkpoint['state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer'])
+            scheduler.load_state_dict(checkpoint['scheduler'])
             print("=> loaded checkpoint '{}' (epoch {})"
                   .format(args.resume, checkpoint['epoch']))
         else:
@@ -87,7 +88,7 @@ def main_worker(train_loader, val_loader, num_classes, args, cifar=False):
         return
 
     for epoch in range(args.start_epoch, args.epochs):
-        scheduler.step(epoch)
+        if epoch: scheduler.step()
 
         # train for one epoch
         train(train_loader, model, criterion, optimizer, epoch, device, args)
@@ -104,7 +105,8 @@ def main_worker(train_loader, val_loader, num_classes, args, cifar=False):
             'arch': args.arch,
             'state_dict': model.state_dict(),
             'best_acc1': best_acc1,
-            'optimizer' : optimizer.state_dict(),
+            'optimizer': optimizer.state_dict(),
+            'scheduler': scheduler.state_dict(),
         }, is_best, args)
 
 
@@ -133,7 +135,7 @@ def train(train_loader, model, criterion, optimizer, epoch, device, args):
         loss = criterion(output, target)
 
         # measure accuracy and record loss
-        acc1, acc5 = accuracy(output, target, topk=(1, 5))
+        acc1, acc5, = accuracy(output, target, topk=(1, 5))
         losses.update(loss.item(), input.size(0))
         top1.update(acc1[0], input.size(0))
         top5.update(acc5[0], input.size(0))
@@ -173,7 +175,7 @@ def validate(val_loader, model, criterion, device, args):
             loss = criterion(output, target)
 
             # measure accuracy and record loss
-            acc1, acc5 = accuracy(output, target, topk=(1, 5))
+            acc1, acc5, = accuracy(output, target, topk=(1, 5))
             losses.update(loss.item(), input.size(0))
             top1.update(acc1[0], input.size(0))
             top5.update(acc5[0], input.size(0))

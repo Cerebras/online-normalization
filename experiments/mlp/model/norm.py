@@ -1,5 +1,5 @@
 """
-Released under BSD 3-Clause License, 
+Released under BSD 3-Clause License,
 Copyright (c) 2019 Cerebras, Inc.
 All rights reserved.
 """
@@ -24,94 +24,91 @@ class Identity(nn.Module):
 class LayerNorm1d(nn.Module):
     __constants__ = ['weight', 'bias']
 
-    def __init__(self, eps=1e-05, weight=True, bias=True, **kwargs):
-        super(LayerNorm2d, self).__init__()
+    def __init__(self, num_features, eps=1e-05, affine=True, **kwargs):
+        super(LayerNorm1d, self).__init__()
 
         self.eps = eps
-        self.weight = weight
-        self.bias = bias
+        self.affine = affine
+        if self.affine:
+            self.weight = nn.Parameter(torch.ones([num_features]),
+                                       requires_grad=True)
+            self.bias = nn.Parameter(torch.zeros([num_features]),
+                                     requires_grad=True)
+        else:
+            self.register_parameter('weight', None)
+            self.register_parameter('bias', None)
 
     def forward(self, x):
-        if not isinstance(self.weight, nn.parameter.Parameter) and not isinstance(self.bias, nn.parameter.Parameter) and (self.weight == True or self.bias == True):
-            self.init_affine(x)
         return nn.functional.layer_norm(x, x.shape[1],
                                         weight=self.weight, bias=self.bias,
                                         eps=self.eps)
 
-    def init_affine(self, x):
-        # Unlike Batch Normalization and Instance Normalization, which applies
-        # scalar scale and bias for each entire channel/plane with the affine
-        # option, Layer Normalization applies per-element scale and bias
-        N, C = x.shape
-        s = [C]
-        if self.weight:
-            self.weight = nn.Parameter(torch.ones(s),
-                                       requires_grad=True)
-        else:
-            self.register_parameter('weight', None)
-        if self.bias:
-            self.bias = nn.Parameter(torch.zeros(s),
-                                     requires_grad=True)
-        else:
-            self.register_parameter('bias', None)
 
-
-def norm(num_features, mode='batch', eps=1e-05, momentum=0.1,
-         weight=True, bias=True, track_running_stats=True, **kwargs):
+def norm(num_features, mode='batch', eps=1e-05, momentum=0.1, affine=True,
+         track_running_stats=True,
+         batch_size=None, alpha_fwd=0.999, alpha_bkw=0.99,
+         ecm='ls', ls_eps=1e-05, clamp_val=5, loop=False, **kwargs):
     """
     Function which instantiates a normalization scheme based on mode
 
-    Arguments:
+    Args:
         num_features: :math:`C` from an expected input of size
-            :math:`(N, C)`
-        mode: Option to select normalization method (Default: 'batch')
+            :math:`(N, C, H, W)`
+        mode: Option to select normalization method (Default: batch)
         eps: a value added to the denominator for numerical stability.
             Default: 1e-5
         momentum: the value used for the running_mean and running_var
             computation. Can be set to ``None`` for cumulative moving average
             (i.e. simple average). Default: 0.1
-        weight: a boolean value that when set to ``True``, this module has
-            learnable linear parameters. Default: ``True``
-        bias: a boolean value that when set to ``True``, this module has
-            learnable bias parameters. Default: ``True``
+        affine: a boolean value that when set to ``True``, this module has
+            learnable affine parameters (weight & bias). Default: ``True``
         track_running_stats: a boolean value that when set to ``True``, this
             module tracks the running mean and variance, and when set to ``False``,
             this module does not track such statistics and always uses batch
             statistics in both training and eval modes. Argument valid when
             using batch norm. Default: ``True``
-
-        Note:
-            1. When using BN affine = weight & bias
-            2. When using OnlineNorm **kwargs will hold hfwd, hbkw, ctrl_norm
-            layer_scaling, and b_size. See definition of OnlineNorm2D for
-            specifics.
+    
+    OnlineNorm Args:
+        batch_size: in order to speed up computation we need to know and fix the
+            batch size a priori.
+        alpha_fwd: the decay factor to be used in fprop to update statistics.
+            Default: 0.999
+        alpha_bkw: the decay factor to be used in fprop to control the gradients
+            propagating through the network. Default: 0.99
+        ecm: a string which defines the error checking mechanism in OnlineNorm.
+            Choice: `ac` (Activation Clamping) | `ls` (Layer Scaling).
+            Default: ls
+        ls_eps: if ecm is `ls`, this is the `ls` eps. Default: 1e-05
+        clamp_val: if ecm is `ac` this is the clamp value. Default: 5
+        loop: a boolean which trigers the looped variant of ControlNorm
+            regaurdless of batch size. Note: looped variant is enabled
+            automatically when batch_size = 1. Default: False
     """
 
     if mode == 'batch':
         warnings.warn('Normalizer: Batch')
-        affine = weight and bias
-        if weight != bias:
-            warnings.warn('affine not used in batch norm')
         normalizer = nn.BatchNorm1d(num_features=num_features, eps=eps,
                                     momentum=momentum, affine=affine,
                                     track_running_stats=track_running_stats)
 
     elif mode == 'layer':
         warnings.warn('Normalizer: Layer')
-        normalizer = LayerNorm1d(eps=eps, weight=weight, bias=bias)
+        normalizer = LayerNorm1d(num_features, eps=eps, affine=affine)
 
     elif mode == 'online':
         warnings.warn('Normalizer: Online')
-        normalizer = OnlineNorm1D(num_features=num_features, eps=eps,
-                                  weight=weight, bias=bias, **kwargs)
+        normalizer = OnlineNorm1D(num_features, batch_size=batch_size,
+                                  alpha_fwd=alpha_fwd, alpha_bkw=alpha_bkw, 
+                                  eps=eps, affine=affine, ecm=ecm,
+                                  ls_eps=ls_eps, clamp_val=clamp_val,
+                                  loop=loop, **kwargs)
 
     elif mode == 'none' or mode is None:
         warnings.warn('Normalizer: None')
         normalizer = Identity()
 
     else:
-        raise KeyError('mode options include: "batch" | "layer" | '
-                       '"online" | "none"')
-
+        raise KeyError('mode options include: '
+                       '"batch" | "layer" | "online" | "none"')
 
     return normalizer

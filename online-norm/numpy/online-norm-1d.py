@@ -1,18 +1,19 @@
 # -*- coding: utf-8 -*-
 """
-Released under BSD 3-Clause License, 
+Released under BSD 3-Clause License,
 Copyright (c) 2019 Cerebras Systems Inc.
 All rights reserved.
 
 This is a numpy implementation of the Online Normalization algorithm and the 
 components which go into it.
 """
+import warnings
 import numpy as np
 
 
-def control_norm_forward(inputs, mstream, varstream, afwd, eps):
+def norm_forward(inputs, mstream, varstream, afwd, eps):
     """
-    Implements the forward pass of the control norm
+    Implements the forward pass of the norm op
     
     For each incoming sample it does:
         out = (inputs - mstream) / sqrt(varstream)
@@ -39,9 +40,9 @@ def control_norm_forward(inputs, mstream, varstream, afwd, eps):
     return out, mstream, varstream, cache
 
 
-def control_norm_backward(grad_out, ustream, vstream, abkw, cache):
+def norm_backward(grad_out, ustream, vstream, abkw, cache):
     """
-    Implements the forward pass of the control norm
+    Implements the backwards pass of the norm op
     
     For each incoming sample it does:
         grad = grad_out - (1 - abkw) * vstream * out
@@ -103,8 +104,22 @@ def layer_scaling_backward(grad_out, cache):
     return grad_in, (None, )
 
 
-class ControlNorm1d:
-    r"""Applies Control Normalization (the per-channel exponential moving
+def activation_clamping_forward(inputs, clamp_val):
+    out = np.clip(inputs, -clamp_val, clamp_val)
+    cache = (out, clamp_val)
+    return out, cache
+
+
+def activation_clamping_backward(grad_out, cache):
+    out, clamp_val = cache
+    grad_in = grad_out.copy()
+    grad_in[np.where(out == clamp_val)] = 0
+    grad_in[np.where(out == -clamp_val)] = 0
+    return grad_in, (None, )
+
+
+class Norm1d:
+    r"""Applies Normalization (the per-channel exponential moving
     average, ema, forward and control process backward part of the Online
     Normalization algorithm) over a 2D inputs (a mini-batch of 1D inputs) as
     described in the paper:
@@ -133,7 +148,7 @@ class ControlNorm1d:
 
     Examples::
 
-        >>> norm = ControlNorm1d(128, .999, .99)
+        >>> norm = Norm1d(128, .999, .99)
         >>> inputs = numpy.random.randn(64, 128)
         >>> output = norm(inputs)
     """
@@ -142,7 +157,7 @@ class ControlNorm1d:
 
     def __init__(self, num_features,
                  alpha_fwd=0.999, alpha_bkw=0.99, eps=1e-05, **kwargs):
-        super(ControlNorm1d, self).__init__()
+        super(Norm1d, self).__init__()
         self.training = True
         self.num_features = num_features
         self.eps = eps
@@ -158,21 +173,22 @@ class ControlNorm1d:
 
     def __call__(self, inputs):
         if self.training:
-            out, self.m, self.var, self.cache = control_norm_forward(inputs,
-                                                                     self.m,
-                                                                     self.var,
-                                                                     self.afwd,
-                                                                     self.eps)
+            out, self.m, self.var, self.cache = norm_forward(inputs,
+                                                             self.m,
+                                                             self.var,
+                                                             self.afwd,
+                                                             self.eps)
+            return out
         mu = self.m[np.newaxis, :]
         var = self.var[np.newaxis, :]
         return (inputs - mu) / np.sqrt(var + self.eps)
 
     def backward(self, grad_out):
-        grad_in, self.u, self.v, grad_param = control_norm_backward(grad_out,
-                                                                    self.u,
-                                                                    self.v,
-                                                                    self.abkw,
-                                                                    self.cache)
+        grad_in, self.u, self.v, _ = norm_backward(grad_out,
+                                                   self.u,
+                                                   self.v,
+                                                   self.abkw,
+                                                   self.cache)
         return grad_in
 
 
@@ -279,7 +295,41 @@ class LayerScaling:
         return output
 
     def backward(self, grad_out):
-        grad_in, grad_param = layer_scaling_backward(grad_out, self.cache)
+        grad_in, _ = layer_scaling_backward(grad_out, self.cache)
+        return grad_in
+
+
+class ActivationClamp:
+    r"""Clips the output of CN.
+
+    .. math::
+        y = clip(x, -clamp_value, clamp_value)
+
+    Args:
+        clamp_value: the value to which activations are clipped.
+            Default: 5
+
+    Shape:
+        - Input: :math:`(N, C)`
+        - Output: :math:`(N, C)` (same shape as input)
+
+    Examples::
+
+        >>> ac = ActivationClamp(clamp_value)
+        >>> input = numpy.random.randn(64, 128)
+        >>> output = ac(input)
+    """
+    def __init__(self, clamp_value=5, **kwargs):
+        super(ActivationClamp, self).__init__()
+        self.clamp_val = clamp_value
+        self.opt_params = None
+
+    def __call__(self, inputs):
+        output, self.cache = activation_clamping_forward(inputs, self.clamp_val)
+        return output
+
+    def backward(self, grad_out):
+        grad_in, _ = activation_clamping_backward(grad_out, self.cache)
         return grad_in
 
 
@@ -289,24 +339,22 @@ class OnlineNorm1d:
     `Online Normalization for Training Neural Networks`.
 
     .. math::
-        y_t = LayerScaling(ControlNorm1d(x_t) * \gamma + \beta)
+        y_t = LayerScaling(Norm1d(x_t) * \gamma + \beta)
 
     Args:
         num_features: :math:`L` from an expected inputs of size :math:`(N, L)`
-        eps: a value added to the denominator for numerical stability.
-            Default: 1e-5
         alpha_fwd: the decay factor to be used in fprop to update statistics.
             Default: 0.999
         alpha_bkw: the decay factor to be used in fprop to control the gradients
             propagating through the network. Default: 0.99
-        b_size: in order to speed up computation we need to know and fix the
-            batch size a priori.
-        weight: a boolean value that when set to ``True``, this module has
-            learnable linear parameters. Default: ``True``
-        bias: a boolean value that when set to ``True``, this module has
-            learnable bias parameters. Default: ``True``
-        layer_scaling: a boolean value that when set to ``True``, this module
-            has layer scaling at the end. Default: ``True``
+        eps: a value added to the denominator for numerical stability.
+            Default: 1e-5
+        affine: a boolean value that when set to ``True``, this module has
+            learnable affine parameters (weight & bias). Default: ``True``
+        ecm: a string which defines the error checking mechanism in OnlineNorm.
+            Choice: `ac` (Activation Clamping) | `ls` (Layer Scaling).
+        ls_eps: if ecm is `ls`, this is the `ls` eps.
+        clamp_val: if ecm is `ac` this is the clamp value.
 
     Shape:
         - Input: :math:`(N, L)`
@@ -317,53 +365,62 @@ class OnlineNorm1d:
         >>> # With Learnable Parameters
         >>> norm = OnlineNorm1d(128, .999, .99)
         >>> # Without Learnable Parameters
-        >>> norm = OnlineNorm1d(128, .999, .99, weight=False, bias=False)
+        >>> norm = OnlineNorm1d(128, .999, .99, affine=False)
         >>> inputs = numpy.random.randn(64, 128)
         >>> output = norm(inputs)
     """
     __constants__ = ['weight', 'bias']
 
     def __init__(self, num_features, alpha_fwd=0.999, alpha_bkw=0.99,
-                 eps=1e-05, weight=True, bias=True,
-                 layer_scaling=True, **kwargs):
+                 eps=1e-05, affine=True,
+                 ecm='ac', ls_eps=1e-05, clamp_val=5, **kwargs):
         super(OnlineNorm1d, self).__init__()
         self.num_features = num_features
 
-        self.ctrl_norm = ControlNorm1d(num_features,
-                                       alpha_fwd=alpha_fwd, alpha_bkw=alpha_bkw,
-                                       eps=eps, **kwargs)
+        self.norm = Norm1d(num_features,
+                           alpha_fwd=alpha_fwd, alpha_bkw=alpha_bkw,
+                           eps=eps, **kwargs)
 
-        self.layer_scaling = LayerScaling(eps=eps) if layer_scaling else None
-
-        if weight:
+        if affine:
             self.weight = WeightScale(num_features)
-        else:
-            self.weight = None
-        if bias:
             self.bias = AddBias(num_features)
         else:
+            self.weight = None
             self.bias = None
+
+        if ecm.lower() == 'ls':
+            self.ecm = LayerScaling(eps=ls_eps)
+            warnings.warn('Using LayerScaling in Online Normalization')
+        elif ecm.lower() == 'ac':
+            self.ecm = ActivationClamp(clamp_val=clamp_val)
+            warnings.warn('Using ActivationClamping in Online Normalization')
+        else:
+            warnings.warn(
+                'No guards on statistical estimates of OnlineNorm,'
+                'possible options: ls | ac'
+            )
+            self.ecm = None
 
         self.opt_params = None
 
     def __call__(self, inputs):
-        # apply control norm
-        out = self.ctrl_norm(inputs)
+        # apply norm
+        out = self.norm(inputs)
         
         # affine transform (optional)
-        out = self.weight(out) if self.weight else out  # scale output
-        out = self.bias(out) if self.bias else out  # add bias
+        out = self.weight(out) if self.weight is not None else out  # scale output
+        out = self.bias(out) if self.bias is not None else out  # add bias
 
-        # apply layer scaling (optional)
-        return self.layer_scaling(out) if self.layer_scaling else out
+        # apply ecm (optional)
+        return self.ecm(out) if self.ecm is not None else out
 
     def backward(self, grad_out):
         grad = grad_out
-        grad = self.layer_scaling.backward(grad) if self.layer_scaling else grad
+        grad = self.ecm.backward(grad) if self.ecm is not None else grad
 
-        grad = self.bias.backward(grad) if self.bias else grad
-        grad = self.weight.backward(grad) if self.weight else grad
+        grad = self.bias.backward(grad) if self.bias is not None else grad
+        grad = self.weight.backward(grad) if self.weight is not None else grad
 
-        grad_in = self.ctrl_norm.backward(grad)
+        grad_in = self.norm.backward(grad)
 
         return grad_in

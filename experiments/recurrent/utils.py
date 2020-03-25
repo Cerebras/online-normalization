@@ -1,5 +1,5 @@
 """
-Released under BSD 3-Clause License, 
+Released under BSD 3-Clause License,
 Modifications are Copyright (c) 2019 Cerebras, Inc.
 All rights reserved.
 """
@@ -23,22 +23,19 @@ best_ppl = 1e32
 def main_worker(train_loader, val_loader, ntokens, args, device):
     global best_ppl
 
-    model_kwargs = {'ntokens': ntokens,
+    model_kwargs = {'dropout': args.dropout,
+                    'tie_weights': not args.not_tied,
+                    'norm': args.norm_mode,
                     'alpha_fwd': args.afwd,
                     'alpha_bkw': args.abkw,
-                    'b_size': args.batch_size,
-                    'layer_scaling': not args.rm_layer_scaling
-                    }
+                    'batch_size': args.batch_size,
+                    'ecm': args.ecm,
+                    'cell_norm': args.cell_norm }
 
     # create model
     print("=> creating model: '{}'".format(args.ru_type))
     model = models.RNNModel(args.ru_type, ntokens, args.emsize, args.nhid,
-                            args.nlayers, args.dropout, not args.not_tied,
-                            norm=args.norm_mode,
-                            b_size=args.batch_size,
-                            alpha_fwd=args.afwd, alpha_bkw=args.abkw,
-                            cell_norm=args.cell_norm,
-                            ls=not args.rm_layer_scaling).to(device)
+                            args.nlayers, **model_kwargs).to(device)
 
     print(model)
 
@@ -60,6 +57,7 @@ def main_worker(train_loader, val_loader, ntokens, args, device):
             best_ppl = checkpoint['best_ppl']
             model.load_state_dict(checkpoint['state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer'])
+            scheduler.load_state_dict(checkpoint['scheduler'])
             print("=> loaded checkpoint '{}' (epoch {})"
                   .format(args.resume, checkpoint['epoch']))
         else:
@@ -68,14 +66,14 @@ def main_worker(train_loader, val_loader, ntokens, args, device):
     cudnn.benchmark = False if args.seed else True
 
     if args.evaluate:
-        validate(val_loader, model, criterion, device, args)
+        validate(val_loader, model, criterion, device, args, ntokens)
         return
 
     for epoch in range(args.start_epoch, args.epochs):
-        scheduler.step(epoch)
+        if epoch: scheduler.step()
 
         # train for one epoch
-        ppl = train(train_loader, model,
+        train(train_loader, model,
                     criterion, optimizer, epoch, device, args, ntokens)
 
         # evaluate on validation set
@@ -89,7 +87,8 @@ def main_worker(train_loader, val_loader, ntokens, args, device):
             'epoch': epoch + 1,
             'state_dict': model.state_dict(),
             'best_ppl': best_ppl,
-            'optimizer' : optimizer.state_dict(),
+            'optimizer': optimizer.state_dict(),
+            'scheduler': scheduler.state_dict(),
         }, is_best, args)
 
 

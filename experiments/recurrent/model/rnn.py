@@ -1,5 +1,5 @@
 """
-Released under BSD 3-Clause License, 
+Released under BSD 3-Clause License,
 Modifications are Copyright (c) 2019 Cerebras, Inc.
 All rights reserved.
 """
@@ -9,7 +9,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from online_norm_pytorch import OnlineNorm1D, ControlNorm1DLoop
+from online_norm_pytorch import OnlineNorm1D
 
 
 """
@@ -97,15 +97,12 @@ class RNNCell(nn.RNNCellBase):
             self.norm = nn.LayerNorm(hidden_size)
             self.reset_norm_parameters()
         elif norm == 'online_norm':
-            if kwargs['b_size'] == 1:
-                warnings.warn('Using OnlineNorm (batch size 1)')
-                self.norm = OnlineNorm1D(hidden_size,
-                                         cn=ControlNorm1DLoop(hidden_size,
-                                                              **kwargs),
-                                         **kwargs)
-            else:
-                warnings.warn('RNN Using OnlineNorm')
-                self.norm = OnlineNorm1D(hidden_size, **kwargs)
+            warnings.warn('RNN Using OnlineNorm')
+            self.norm = OnlineNorm1D(
+                hidden_size, batch_size=kwargs['batch_size'],
+                alpha_fwd=kwargs['alpha_fwd'], alpha_bkw=kwargs['alpha_bkw'], 
+                ecm=kwargs['ecm']
+            )
             self.reset_norm_parameters()
         elif norm == 'none':
             warnings.warn('RNN Not Using A Norm')
@@ -166,18 +163,16 @@ class RNN(nn.Module):
             else:
                 raise ValueError(f"Unknown nonlinearity norm {norm}")
 
-        # cache first layer
-        self.rnn_cells = [RNNCell(input_size=input_size,
-                                  hidden_size=hidden_size,
-                                  bias=bias, norm=norm,
-                                  nonlinearity=nonlinearity, **kwargs)]
-
-        # cache all subsequent layers
-        for cell_idx in range(1, num_layers):
-            self.rnn_cells += [RNNCell(input_size=hidden_size,
-                                       hidden_size=hidden_size,
-                                       bias=bias, norm=norm,
-                                       nonlinearity=nonlinearity, **kwargs)]
+        self.rnn_cells = [
+            RNNCell(
+                input_size=hidden_size if i else input_size,
+                hidden_size=hidden_size,
+                bias=bias, norm=norm,
+                nonlinearity=nonlinearity,
+                **kwargs
+            ) 
+            for i in range(num_layers)
+        ]
 
         self.set_rnn_modules()
 
@@ -187,7 +182,7 @@ class RNN(nn.Module):
 
     def forward(self, input, hidden):
         out = []
-        for t, input_t in enumerate(input):
+        for input_t in input:
             hidden[0] = self.rnn_cells[0](input_t, hidden[0])
             if self.num_layers - 1:
                 hidden[0] = F.dropout(hidden[0], p=self.dropout,

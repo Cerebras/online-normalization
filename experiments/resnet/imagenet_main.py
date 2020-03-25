@@ -1,5 +1,5 @@
 """
-Released under BSD 3-Clause License, 
+Released under BSD 3-Clause License,
 Modifications are Copyright (c) 2019 Cerebras, Inc.
 All rights reserved.
 """
@@ -27,7 +27,7 @@ model_names = sorted(name for name in models.__dict__
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
 parser.add_argument('data', metavar='DIR',
                     help='path to dataset')
-parser.add_argument('--model_dir', type=str, default='./model_dir',
+parser.add_argument('--model-dir', type=str, default='./model_dir',
                     help='dir to which model is saved (default: ./model_dir)')
 parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet18',
                     choices=model_names,
@@ -46,11 +46,11 @@ parser.add_argument('-b', '--batch-size', default=256, type=int,
 parser.add_argument('--lr', '--learning-rate', default=0.1, type=float,
                     metavar='LR', help='initial learning rate (default: 0.1)',
                     dest='lr')
-parser.add_argument('--lr_milestones', nargs='+', type=int,
+parser.add_argument('--lr-milestones', nargs='+', type=int,
                         default=[30, 60, 80, 90],
                         help='epochs at which we take a learning-rate step '
                              '(default: [30, 60, 80, 90])')
-parser.add_argument('--lr_multiplier', default=0.1, type=float, metavar='M',
+parser.add_argument('--lr-multiplier', default=0.1, type=float, metavar='M',
                     help='lr multiplier at lr_milestones (default: 0.1)')
 parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
                     help='optimizer momentum (default: 0.9)')
@@ -67,25 +67,29 @@ parser.add_argument('--pretrained', dest='pretrained', action='store_true',
                     help='use pre-trained model')
 parser.add_argument('--seed', default=None, type=int,
                     help='seed for initializing training')
-parser.add_argument('--norm_mode', default='batch', type=str,
-                    metavar='NORM',
-                    help='select normalization type. options: "batch" | '
-                         '"group" | "layer" | "instance" | "online" | '
-                         '"none". (default: batch)')
-parser.add_argument('--afwd', '--decay_factor_forward', default=0.999,
+norm_choices=['batch', 'group', 'layer', 'instance', 'online', 'none']
+parser.add_argument('--norm-mode', default='batch', type=str,
+                    metavar='NORM', choices=norm_choices,
+                    help='norm choices: ' +
+                        ' | '.join(norm_choices) +
+                        ' (default: batch)')
+parser.add_argument('--afwd', '--decay-factor-forward', default=0.999,
                     type=float, metavar='AFWD', dest='afwd',
                     help='forward decay factor which sets momentum process '
                          'hyperparameter when using online normalization '
                          '(default: 0.999)')
-parser.add_argument('--abkw', '--decay_factor_backward', default=0.99,
+parser.add_argument('--abkw', '--decay-factor-backward', default=0.99,
                     type=float, metavar='ABKW', dest='abkw',
                     help='backward decay factor which sets control process '
                          'hyperparameter when using online normalization '
                          '(default: 0.99)')
-parser.add_argument('--rm_layer_scaling', action='store_true',
-                    help='remove layer scaling in online normalization '
-                         '(default: False)')
-parser.add_argument('--gn_num_groups', default=32, type=int,
+ecm_choices=['ls', 'ac', 'none']
+parser.add_argument('--ecm', default='ls', type=str,
+                    metavar='ECM', choices=ecm_choices,
+                    help='Online Norm ErrorCheckingMechanism choices: ' +
+                        ' | '.join(ecm_choices) +
+                        ' (default: ls)')
+parser.add_argument('--gn-num-groups', default=32, type=int,
                     help='number of groups in group norm if using group norm '
                          'as normalization method (default: 32)')
 args = parser.parse_args()

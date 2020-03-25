@@ -37,3 +37,11 @@ output = norm(inputs)
 grad_out = numpy.random.randn(N, C)  # generate fake gradient
 grad_in = norm.backward(grad_out)
 ```
+
+## change log
+
+### 2020-03-25
+
+#### Added
+
+- Added [activation clamping](LinkToActClampPaper) as an error checking mechanism (ecm) and make it the default ecm.

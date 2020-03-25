@@ -1,17 +1,18 @@
 # -*- coding: utf-8 -*-
 """
-Released under BSD 3-Clause License, 
+Released under BSD 3-Clause License,
 Copyright (c) 2019 Cerebras Systems Inc.
 All rights reserved.
 
 This module tests the Online Normalization module
 """
 import time
-import unittest
 import logging
+import unittest
 import numpy as np
 import torch
-from online_norm_pytorch import OnlineNorm1D, ControlNorm1DLoop
+
+from online_norm_pytorch import OnlineNorm1D
 
 
 class TestOnlineNorm1D(unittest.TestCase):
@@ -21,26 +22,23 @@ class TestOnlineNorm1D(unittest.TestCase):
     """
     logger = logging.getLogger('test_logger')
 
-    def test010_similarity(self, b_size=4, dim=1024,
+    def test010_similarity(self, batch_size=4, dim=1024,
                            alpha_fwd=0.999, alpha_bkw=0.99, eps=1e-05, itrs=4):
         """ numerical similarity for online norm linearized vs loops """
         # instantiate inputs
-        input = torch.randn(b_size, dim)
+        input = torch.randn(batch_size, dim)
         input_0 = input.clone().detach().requires_grad_(True)
         input_1 = input.clone().detach().requires_grad_(True)
         # instantiate gradient at the output
-        grad_out = torch.randn(b_size, dim)
+        grad_out = torch.randn(batch_size, dim)
 
         # instantiate Linearized Online Norm class
-        onlin = OnlineNorm1D(dim, alpha_fwd=alpha_fwd, alpha_bkw=alpha_bkw,
-                             eps=eps, b_size=b_size)
+        onlin = OnlineNorm1D(dim, batch_size,
+                             alpha_fwd=alpha_fwd, alpha_bkw=alpha_bkw, eps=eps)
 
         # instantiate Looping Online Norm class
-        onloop = OnlineNorm1D(dim, eps=eps,
-                              ctrl_norm=ControlNorm1DLoop(dim,
-                                                          alpha_fwd=alpha_fwd,
-                                                          alpha_bkw=alpha_bkw,
-                                                          eps=eps))
+        onloop = OnlineNorm1D(dim,
+                              alpha_fwd=alpha_fwd, alpha_bkw=alpha_bkw, eps=eps)
 
         for _ in range(itrs):
             # fprop through Linearized Online Norm class
@@ -65,18 +63,18 @@ class TestOnlineNorm1D(unittest.TestCase):
                          'numerically matches algorithm implemented with '
                          'loops')
 
-    def test020_speed(self, b_size=64, dim=1024,
+    def test020_speed(self, batch_size=64, dim=1024,
                       alpha_fwd=0.999, alpha_bkw=0.99, eps=1e-05, epoch=100):
         """
         Speed test online norm linearized vs loops
         Note: this test doesn't check anything it helps the user choose a
             algorithm configuration based on use case.
         """
-        input = torch.randn(b_size, dim)
+        input = torch.randn(batch_size, dim)
 
         # instantiate Linearized Online Norm class
-        onlin = OnlineNorm1D(dim, alpha_fwd=alpha_fwd, alpha_bkw=alpha_bkw,
-                             eps=eps, b_size=b_size)
+        onlin = OnlineNorm1D(dim, batch_size,
+                             alpha_fwd=alpha_fwd, alpha_bkw=alpha_bkw, eps=eps)
 
         # time lin algo
         forward = 0
@@ -99,11 +97,8 @@ class TestOnlineNorm1D(unittest.TestCase):
 
         # Speed test online norm
         # instantiate Looping Online Norm class
-        onloop = OnlineNorm1D(dim, eps=eps,
-                              ctrl_norm=ControlNorm1DLoop(dim,
-                                                          alpha_fwd=alpha_fwd,
-                                                          alpha_bkw=alpha_bkw,
-                                                          eps=eps))
+        onloop = OnlineNorm1D(dim,
+                              alpha_fwd=alpha_fwd, alpha_bkw=alpha_bkw, eps=eps)
 
         # time loop algo
         forward = 0
@@ -119,7 +114,7 @@ class TestOnlineNorm1D(unittest.TestCase):
             out.sum().backward()
             backward += time.time() - start
 
-        self.logger.info(f'Loop Control Normalization Speed Test: '
+        self.logger.info(f'Loop Normalization Speed Test: '
                          f'Forward {forward * 1e6/1e5:.3f} us | '
                          f'Backward {backward * 1e6/1e5:.3f} us | '
                          f'Total {(forward + backward) * 1e6/1e5:.3f} us')
