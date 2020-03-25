@@ -39,8 +39,6 @@ class LayerNorm1d(nn.Module):
             self.register_parameter('bias', None)
 
     def forward(self, x):
-        if self.affine and self.weight is None and self.bias is None:
-            self.init_affine(x)
         return nn.functional.layer_norm(x, x.shape[1],
                                         weight=self.weight, bias=self.bias,
                                         eps=self.eps)
