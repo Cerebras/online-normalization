@@ -11,9 +11,9 @@ import warnings
 import numpy as np
 
 
-def control_norm_forward(inputs, mstream, varstream, afwd, eps):
+def norm_forward(inputs, mstream, varstream, afwd, eps):
     """
-    Implements the forward pass of the control norm
+    Implements the forward pass of the norm op
     
     For each incoming sample it does:
         out = (inputs - mstream) / sqrt(varstream)
@@ -45,9 +45,9 @@ def control_norm_forward(inputs, mstream, varstream, afwd, eps):
     return out, mstream, varstream, cache
 
 
-def control_norm_backward(grad_out, ustream, vstream, abkw, cache):
+def norm_backward(grad_out, ustream, vstream, abkw, cache):
     """
-    Implements the forward pass of the control norm
+    Implements the forward pass of the norm op
     
     For each incoming sample it does:
         grad = grad_out - (1 - abkw) * vstream * out
@@ -125,8 +125,8 @@ def activation_clamping_backward(grad_out, cache):
     return grad_in, (None, )
 
 
-class ControlNorm2d:
-    r"""Applies Control Normalization (the per-channel exponential moving
+class Norm2d:
+    r"""Applies Normalization (the per-channel exponential moving
     average, ema, forward and control process backward part of the Online
     Normalization algorithm) over a 4D inputs (a mini-batch of 3D inputs) as
     described in the paper:
@@ -155,7 +155,7 @@ class ControlNorm2d:
 
     Examples::
 
-        >>> norm = ControlNorm2d(128, .999, .99)
+        >>> norm = Norm2d(128, .999, .99)
         >>> inputs = numpy.random.randn(64, 128, 32, 32)
         >>> output = norm(inputs)
     """
@@ -164,7 +164,7 @@ class ControlNorm2d:
 
     def __init__(self, num_features,
                  alpha_fwd=.999, alpha_bkw=.99, eps=1e-05, **kwargs):
-        super(ControlNorm2d, self).__init__()
+        super(Norm2d, self).__init__()
         self.training = True
         self.num_features = num_features
         self.eps = eps
@@ -180,22 +180,22 @@ class ControlNorm2d:
 
     def __call__(self, inputs):
         if self.training:
-            out, self.m, self.var, self.cache = control_norm_forward(inputs,
-                                                                     self.m,
-                                                                     self.var,
-                                                                     self.afwd,
-                                                                     self.eps)
+            out, self.m, self.var, self.cache = norm_forward(inputs,
+                                                             self.m,
+                                                             self.var,
+                                                             self.afwd,
+                                                             self.eps)
             return out
         mu = self.m[np.newaxis, :, np.newaxis, np.newaxis]
         var = self.var[np.newaxis, :, np.newaxis, np.newaxis]
         return (inputs - mu) / np.sqrt(var + self.eps)
 
     def backward(self, grad_out):
-        grad_in, self.u, self.v, _ = control_norm_backward(grad_out,
-                                                                    self.u,
-                                                                    self.v,
-                                                                    self.abkw,
-                                                                    self.cache)
+        grad_in, self.u, self.v, _ = norm_backward(grad_out,
+                                                   self.u,
+                                                   self.v,
+                                                   self.abkw,
+                                                   self.cache)
         return grad_in
 
 
@@ -346,7 +346,7 @@ class OnlineNorm2d:
     `Online Normalization for Training Neural Networks`.
 
     .. math::
-        y_t = LayerScaling(ControlNorm2d(x_t) * \gamma + \beta)
+        y_t = LayerScaling(Norm2d(x_t) * \gamma + \beta)
 
     Args:
         num_features: :math:`L` from an expected inputs of size :math:`(N, L)`
@@ -384,9 +384,9 @@ class OnlineNorm2d:
         super(OnlineNorm2d, self).__init__()
         self.num_features = num_features
 
-        self.ctrl_norm = ControlNorm2d(num_features,
-                                       alpha_fwd=alpha_fwd, alpha_bkw=alpha_bkw,
-                                       eps=eps, **kwargs)
+        self.norm = Norm2d(num_features,
+                           alpha_fwd=alpha_fwd, alpha_bkw=alpha_bkw,
+                           eps=eps, **kwargs)
 
         if ecm.lower() == 'ls':
             self.ecm = LayerScaling(eps=ls_eps)
@@ -411,8 +411,8 @@ class OnlineNorm2d:
         self.opt_params = None
 
     def __call__(self, inputs):
-        # apply control norm
-        out = self.ctrl_norm(inputs)
+        # apply norm
+        out = self.norm(inputs)
         
         # affine transform (optional)
         out = self.weight(out) if self.weight is not None else out  # scale output
@@ -428,6 +428,6 @@ class OnlineNorm2d:
         grad = self.bias.backward(grad) if self.bias is not None else grad
         grad = self.weight.backward(grad) if self.weight is not None else grad
 
-        grad_in = self.ctrl_norm.backward(grad)
+        grad_in = self.norm.backward(grad)
 
         return grad_in

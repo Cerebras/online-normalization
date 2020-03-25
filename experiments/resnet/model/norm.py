@@ -87,8 +87,9 @@ def norm(num_features, mode='batch', eps=1e-05, momentum=0.1, affine=True,
             propagating through the network. Default: 0.99
         ecm: a string which defines the error checking mechanism in OnlineNorm.
             Choice: `ac` (Activation Clamping) | `ls` (Layer Scaling).
-        ls_eps: if ecm is `ls`, this is the `ls` eps.
-        clamp_val: if ecm is `ac` this is the clamp value.
+            Default: ls
+        ls_eps: if ecm is `ls`, this is the `ls` eps. Default: 1e-05
+        clamp_val: if ecm is `ac` this is the clamp value. Default: 5
         loop: a boolean which trigers the looped variant of ControlNorm
             regaurdless of batch size. Note: looped variant is enabled
             automatically when batch_size = 1. Default: False

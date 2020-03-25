@@ -9,7 +9,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from online_norm_pytorch import OnlineNorm1D, ControlNorm1DLoop
+from online_norm_pytorch import OnlineNorm1D
 
 """
 Implementation of LSTM in pytorch
@@ -245,28 +245,17 @@ class LSTM(nn.Module):
         self.dropout = dropout
 
         # cache first layer
-        if norm:
-            self.lstm_cells = [NormLSTMCell(input_size=input_size,
-                                            hidden_size=hidden_size,
-                                            bias=bias, norm=norm,
-                                            cell_norm=cell_norm, **kwargs)]
-        else:
-            self.lstm_cells = [LSTMCellCustom(input_size=input_size,
-                                              hidden_size=hidden_size,
-                                              bias=bias, **kwargs)]
-
-        # cache all subsequent layers
-        for _ in range(1, num_layers):
-            if norm:
-                self.lstm_cells += [NormLSTMCell(input_size=hidden_size,
-                                                 hidden_size=hidden_size,
-                                                 bias=bias, norm=norm,
-                                                 cell_norm=cell_norm,
-                                                 **kwargs)]
-            else:
-                self.lstm_cells += [LSTMCellCustom(input_size=hidden_size,
-                                                   hidden_size=hidden_size,
-                                                   bias=bias, **kwargs)]
+        norm_cell = NormLSTMCell if norm else LSTMCellCustom
+        self.lstm_cells = [
+            norm_cell(
+                input_size=hidden_size if i else input_size,
+                hidden_size=hidden_size,
+                bias=bias, norm=norm,
+                cell_norm=cell_norm,
+                **kwargs
+            ) 
+            for i in range(num_layers)
+        ]
 
         self.set_lstm_modules()
 

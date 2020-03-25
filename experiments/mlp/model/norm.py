@@ -24,13 +24,19 @@ class Identity(nn.Module):
 class LayerNorm1d(nn.Module):
     __constants__ = ['weight', 'bias']
 
-    def __init__(self, eps=1e-05, affine=True, **kwargs):
+    def __init__(self, num_features, eps=1e-05, affine=True, **kwargs):
         super(LayerNorm1d, self).__init__()
 
         self.eps = eps
         self.affine = affine
-        self.weight = None
-        self.bias = None
+        if self.affine:
+            self.weight = nn.Parameter(torch.ones([num_features]),
+                                       requires_grad=True)
+            self.bias = nn.Parameter(torch.zeros([num_features]),
+                                     requires_grad=True)
+        else:
+            self.register_parameter('weight', None)
+            self.register_parameter('bias', None)
 
     def forward(self, x):
         if self.affine and self.weight is None and self.bias is None:
@@ -38,19 +44,6 @@ class LayerNorm1d(nn.Module):
         return nn.functional.layer_norm(x, x.shape[1],
                                         weight=self.weight, bias=self.bias,
                                         eps=self.eps)
-
-    def init_affine(self, x):
-        # Unlike Batch Normalization and Instance Normalization, which applies
-        # scalar scale and bias for each entire channel/plane with the affine
-        # option, Layer Normalization applies per-element scale and bias
-        _, C = x.shape
-        s = [C]
-        if self.affine:
-            self.weight = nn.Parameter(torch.ones(s), requires_grad=True)
-            self.bias = nn.Parameter(torch.zeros(s), requires_grad=True)
-        else:
-            self.register_parameter('weight', None)
-            self.register_parameter('bias', None)
 
 
 def norm(num_features, mode='batch', eps=1e-05, momentum=0.1, affine=True,
@@ -86,8 +79,9 @@ def norm(num_features, mode='batch', eps=1e-05, momentum=0.1, affine=True,
             propagating through the network. Default: 0.99
         ecm: a string which defines the error checking mechanism in OnlineNorm.
             Choice: `ac` (Activation Clamping) | `ls` (Layer Scaling).
-        ls_eps: if ecm is `ls`, this is the `ls` eps.
-        clamp_val: if ecm is `ac` this is the clamp value.
+            Default: ls
+        ls_eps: if ecm is `ls`, this is the `ls` eps. Default: 1e-05
+        clamp_val: if ecm is `ac` this is the clamp value. Default: 5
         loop: a boolean which trigers the looped variant of ControlNorm
             regaurdless of batch size. Note: looped variant is enabled
             automatically when batch_size = 1. Default: False
@@ -101,7 +95,7 @@ def norm(num_features, mode='batch', eps=1e-05, momentum=0.1, affine=True,
 
     elif mode == 'layer':
         warnings.warn('Normalizer: Layer')
-        normalizer = LayerNorm1d(eps=eps, affine=affine)
+        normalizer = LayerNorm1d(num_features, eps=eps, affine=affine)
 
     elif mode == 'online':
         warnings.warn('Normalizer: Online')

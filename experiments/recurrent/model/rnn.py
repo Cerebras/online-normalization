@@ -9,7 +9,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from online_norm_pytorch import OnlineNorm1D, ControlNorm1DLoop
+from online_norm_pytorch import OnlineNorm1D
 
 
 """
@@ -163,18 +163,16 @@ class RNN(nn.Module):
             else:
                 raise ValueError(f"Unknown nonlinearity norm {norm}")
 
-        # cache first layer
-        self.rnn_cells = [RNNCell(input_size=input_size,
-                                  hidden_size=hidden_size,
-                                  bias=bias, norm=norm,
-                                  nonlinearity=nonlinearity, **kwargs)]
-
-        # cache all subsequent layers
-        for cell_idx in range(1, num_layers):
-            self.rnn_cells += [RNNCell(input_size=hidden_size,
-                                       hidden_size=hidden_size,
-                                       bias=bias, norm=norm,
-                                       nonlinearity=nonlinearity, **kwargs)]
+        self.rnn_cells = [
+            RNNCell(
+                input_size=hidden_size if i else input_size,
+                hidden_size=hidden_size,
+                bias=bias, norm=norm,
+                nonlinearity=nonlinearity,
+                **kwargs
+            ) 
+            for i in range(num_layers)
+        ]
 
         self.set_rnn_modules()
 

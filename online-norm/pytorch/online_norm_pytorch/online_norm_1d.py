@@ -510,11 +510,12 @@ class OnlineNorm1D(nn.Module):
             learnable affine parameters (weight & bias). Default: ``True``
         ecm: a string which defines the error checking mechanism in OnlineNorm.
             Choice: `ac` (Activation Clamping) | `ls` (Layer Scaling).
-        ls_eps: if ecm is `ls`, this is the `ls` eps.
-        clamp_val: if ecm is `ac` this is the clamp value.
+            Default: ls
+        ls_eps: if ecm is `ls`, this is the `ls` eps. Default: 1e-05
+        clamp_val: if ecm is `ac` this is the clamp value. Default: 5
         batch_acceleration: enable batch accelerated variant of norm. Requires
             knowing the batch size apriori. Automatically diabled if batch size
-            is 1 or None. Default: True
+            is 1 or None. Default: ``True``
 
     Shape:
         - Input: :math:`(N, L)`
