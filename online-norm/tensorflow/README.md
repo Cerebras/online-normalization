@@ -89,7 +89,7 @@ nosetests
 
 #### Added
 
-- Added [activation clamping](LinkToActClampPaper) as an error checking mechanism (ecm) and make it the defualt ecm.
+- Added [activation clamping](LinkToActClampPaper) as an error checking mechanism (ecm) and make it the default ecm.
 
 #### Changed
 
