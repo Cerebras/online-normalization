@@ -25,7 +25,6 @@ def main_worker(train_loader, val_loader, num_classes, args):
     norm_kwargs = {'mode': args.norm_mode,
                    'alpha_fwd': args.afwd,
                    'alpha_bkw': args.abkw,
-                   'batch_size': args.batch_size,  # Deprecated
                    'ecm': args.ecm}
 
     # create model

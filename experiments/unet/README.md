@@ -99,3 +99,11 @@ optional arguments:
   --v-size N            val set size (default: 200)
   --im-size N           image height and width (default: 192)
 ```
+
+## change log
+
+### 2020-04-01
+
+#### Added
+
+- Added CUDA kernel for online norm experiments instead of using linearized online norm implementation

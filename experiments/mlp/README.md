@@ -82,3 +82,11 @@ optional arguments:
   --ecm ECM             Online Norm ErrorCheckingMechanism choices: ls | ac |
                         none (default: ls)
 ```
+
+## change log
+
+### 2020-04-01
+
+#### Added
+
+- Added CUDA kernel for online norm experiments instead of using linearized online norm implementation

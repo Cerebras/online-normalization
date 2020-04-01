@@ -45,8 +45,7 @@ class LayerNorm1d(nn.Module):
 
 
 def norm(num_features, mode='batch', eps=1e-05, momentum=0.1, affine=True,
-         track_running_stats=True,
-         batch_size=None, alpha_fwd=0.999, alpha_bkw=0.99,
+         track_running_stats=True, alpha_fwd=0.999, alpha_bkw=0.99,
          ecm='ls', ls_eps=1e-05, clamp_val=5, **kwargs):
     """
     Function which instantiates a normalization scheme based on mode
@@ -69,8 +68,6 @@ def norm(num_features, mode='batch', eps=1e-05, momentum=0.1, affine=True,
             using batch norm. Default: ``True``
     
     OnlineNorm Args:
-        batch_size: Deprecated with Norm1DBatched. in order to speed up computation
-            we need to know and fix the batch size a priori.
         alpha_fwd: the decay factor to be used in fprop to update statistics.
             Default: 0.999
         alpha_bkw: the decay factor to be used in fprop to control the gradients
@@ -94,7 +91,7 @@ def norm(num_features, mode='batch', eps=1e-05, momentum=0.1, affine=True,
 
     elif mode == 'online':
         warnings.warn('Normalizer: Online')
-        normalizer = OnlineNorm1d(num_features, batch_size=batch_size,
+        normalizer = OnlineNorm1d(num_features,
                                   alpha_fwd=alpha_fwd, alpha_bkw=alpha_bkw, 
                                   eps=eps, affine=affine, ecm=ecm,
                                   ls_eps=ls_eps, clamp_val=clamp_val, **kwargs)

@@ -67,7 +67,7 @@ def norm(num_features, mode='batch', eps=1e-05, momentum=0.1, affine=True,
 
     elif mode == 'online':
         warnings.warn('Normalizer: Online')
-        normalizer = OnlineNorm2d(num_features, batch_size=batch_size,
+        normalizer = OnlineNorm2d(num_features,
                                   alpha_fwd=alpha_fwd, alpha_bkw=alpha_bkw, 
                                   eps=eps, affine=affine, ecm=ecm,
                                   ls_eps=ls_eps, clamp_val=clamp_val, **kwargs)

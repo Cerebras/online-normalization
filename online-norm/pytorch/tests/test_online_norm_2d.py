@@ -6,6 +6,8 @@ All rights reserved.
 
 This module tests the Online Normalization module
 """
+import os
+import sys
 import logging
 import unittest
 import numpy as np
