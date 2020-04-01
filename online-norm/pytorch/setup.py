@@ -66,7 +66,7 @@ setup(
     author_email="vitaliy@cerebras.net, info@cerebras.net",
     url="https://github.com/Cerebras/online-normalization",
     description="Online Normalization in PyTorch.",
-    packages=find_packages(exclude=("tests", "dep_online_norm_pytorch")),
+    packages=find_packages(exclude=("tests")),
     ext_modules=get_extensions(),
     cmdclass={"build_ext": torch.utils.cpp_extension.BuildExtension},
 )
