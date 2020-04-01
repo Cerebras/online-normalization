@@ -46,7 +46,7 @@ def norm(num_features, mode='batch', eps=1e-05, momentum=0.1, affine=True,
             using batch norm. Default: ``True``
     
     OnlineNorm Args:
-        batch_size: Deprecated with Norm2DBatched. order to speed up computation
+        batch_size: Deprecated with Norm2DBatched. in order to speed up computation
             we need to know and fix the batch size a priori.
         alpha_fwd: the decay factor to be used in fprop to update statistics.
             Default: 0.999

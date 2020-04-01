@@ -521,7 +521,7 @@ class OnlineNorm2d(nn.Module):
 
     Args:
         num_features: :math:`L` from an expected input of size :math:`(N, L)`
-        batch_size: Deprecated with Norm2DBatched. order to speed up computation
+        batch_size: Deprecated with Norm2DBatched. in order to speed up computation
             we need to know and fix the batch size a priori.
         alpha_fwd: the decay factor to be used in fprop to update statistics.
             Default: 0.999
