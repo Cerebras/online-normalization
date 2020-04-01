@@ -99,7 +99,7 @@ class RNNCell(nn.RNNCellBase):
         elif norm == 'online_norm':
             warnings.warn('RNN Using OnlineNorm')
             self.norm = OnlineNorm1d(
-                hidden_size,
+                hidden_size, batch_size=kwargs['batch_size'],
                 alpha_fwd=kwargs['alpha_fwd'], alpha_bkw=kwargs['alpha_bkw'], 
                 ecm=kwargs['ecm']
             )

@@ -171,10 +171,10 @@ class NormLSTMCell(nn.RNNCellBase):
         elif norm[0].lower() == 'o':
             warnings.warn('Using Online Norm in LSTMCell')
             self.norms = [
-                OnlineNorm1d(hidden_size,
+                OnlineNorm1d(hidden_size, batch_size=kwargs['batch_size'],
                              alpha_fwd=kwargs['alpha_fwd'],
                              alpha_bkw=kwargs['alpha_bkw'], 
-                             ecm=kwargs['ecm'], eps=1e-5) for _ in range(num_norms)]
+                             ecm=kwargs['ecm']) for _ in range(num_norms)]
 
         self.reset_norm_parameters()
         self.set_norm_modules()

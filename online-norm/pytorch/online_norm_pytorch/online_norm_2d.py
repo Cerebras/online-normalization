@@ -208,6 +208,7 @@ def lin_momentum(mu_prev, mu_curr, mu_stream,
     """
     Helper function for performing an exponential moving average, ema, using
     convolutions which can be distributed across compute fabric.
+
     Arguments:
         mu_prev: previous time steps statistic
         mu_curr: this time steps statistic
@@ -215,6 +216,7 @@ def lin_momentum(mu_prev, mu_curr, mu_stream,
         momentum: decay factor of streaming process
         momentum_pow: momentum ^ range(b_size - 1, -1, -1)
         momentum_batch: momentum ^ b_size of size :math:`(N, L)`
+
     Return:
         updated mu_stream (stale): to use for fprop
         updated mu_stream (current): to cache for next iteration
@@ -230,6 +232,7 @@ def conv_alongb_w1(input, b, c):
     """
     helper functions for fast lin_crtls
     Convolve along 2b dimension with a b length vector of 1's
+    
     assumes order (b, 2b, c)
     """
     input = input.transpose(0, 1).clone().view(2 * b, -1).t().unsqueeze(1)
@@ -260,6 +263,7 @@ def lin_crtl(delta, out, b_size, num_features, v_p, alpha_p, beta_p,
     """
     Helper function for controlling with v controller using
     convolutions which can be distributed across compute fabric.
+
     Arguments:
         delta: grad_out
         out: output of normalization
@@ -271,6 +275,7 @@ def lin_crtl(delta, out, b_size, num_features, v_p, alpha_p, beta_p,
         abkw: decay factor for bpass
         eps: eps by which to clip alpha which gets log applied to it.
             Default: 1e-32
+
     Return:
         grad_in
         v_new: current estimate of v
@@ -323,18 +328,24 @@ class Norm2dBatched(nn.Module):
     Normalization algorithm) over a 4D input (a mini-batch of 3D inputs) as
     described in the paper:
     `Online Normalization for Training Neural Networks`.
+
     .. math::
         y_t = \frac{x_t - \mu_{t-1}}{\sqrt{\sigma^2_{t-1} + \epsilon}}
+
         \sigma^2_t = (
             \alpha_fwd * \sigma^2_{t-1} +
             \alpha_fwd * (1 - \alpha_fwd) * (x_t - \mu_{t-1}) ^ 2
         )
+
         \mu_t = \alpha_fwd * \mu_{t-1} + (1 - \alpha_fwd) * x_t
+
     The mean and standard-deviation are estimated per-channel.
+
     The math above represents the calculations occurring in the layer. To
     speed up computation with batched training we linearize the computation
     along the batch dimension and use convolutions in place of sums to
     distribute the computation across compute fabric.
+
     Args:
         num_features: :math:`L` from an expected input of size :math:`(N, L)`
         batch_size (N): in order to speed up computation we need to know and fix
@@ -345,9 +356,11 @@ class Norm2dBatched(nn.Module):
             propagating through the network. Default: 0.99
         eps: a value added to the denominator for numerical stability.
             Default: 1e-5
+
     Shape:
         - Input: :math:`(N, C, H, W)`
         - Output: :math:`(N, C, H, W)` (same shape as input)
+
     Examples::
         >>> B, C = 32, 256
         >>> norm = Norm2DBatched(C, B, 0.999, 0.99)
@@ -508,6 +521,8 @@ class OnlineNorm2d(nn.Module):
 
     Args:
         num_features: :math:`L` from an expected input of size :math:`(N, L)`
+        batch_size: Deprecated with Norm2DBatched. order to speed up computation
+            we need to know and fix the batch size a priori.
         alpha_fwd: the decay factor to be used in fprop to update statistics.
             Default: 0.999
         alpha_bkw: the decay factor to be used in fprop to control the gradients
@@ -543,6 +558,7 @@ class OnlineNorm2d(nn.Module):
         super(OnlineNorm2d, self).__init__()
         self.num_features = num_features
 
+        batch_acceleration = True
         if batch_size is None or batch_size == 1:
             batch_acceleration = False
 

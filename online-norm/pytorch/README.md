@@ -64,4 +64,4 @@ python -m unittest discover -v
 
 #### Added
 
-- Added CUDA kernel for online norm (removed looped and linearized version of norm)
+- Added CUDA kernel for online norm (removed python loop version of norm, deprecate BON)

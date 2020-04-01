@@ -6,10 +6,8 @@ All rights reserved.
 """
 import glob
 import os
-import shutil
 from os import path
-from setuptools import find_packages, setup
-from typing import List
+from setuptools import setup, find_packages
 import torch
 from torch.utils.cpp_extension import CUDA_HOME, CppExtension, CUDAExtension
 
