@@ -6,18 +6,22 @@ All rights reserved.
 
 This module tests the Online Normalization module
 """
+import os
+import sys
 import logging
 import unittest
 import numpy as np
 import torch
 
 from online_norm_pytorch import OnlineNorm1d
-from .np_online_norm_1d import NpOnlineNorm1d
+
+sys.path.append(os.path.dirname(os.path.abspath(__file__)) + "/../..")
+from numpy_on import OnlineNorm1d as NpOnlineNorm1d
 
 logger = logging.getLogger(__name__)
 
 
-class TestOnlineNorm1D(unittest.TestCase):
+class TestOnlineNorm1d(unittest.TestCase):
     def test010_nuerical_comparison(
         self,
         batch_size=32,

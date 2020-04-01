@@ -49,7 +49,8 @@ output = norm(input)
 
 To test after installation:
 ```bash
-python -m unittest discover -v
+python -m tests.test_online_norm_1d
+python -m tests.test_online_norm_2d
 ```
 
 ## change log

@@ -14,7 +14,9 @@ import numpy as np
 import torch
 
 from online_norm_pytorch import OnlineNorm2d
-from .np_online_norm_2d import NpOnlineNorm2d
+
+sys.path.append(os.path.dirname(os.path.abspath(__file__)) + "/../..")
+from numpy_on import OnlineNorm2d as NpOnlineNorm2d
 
 logger = logging.getLogger(__name__)
 
