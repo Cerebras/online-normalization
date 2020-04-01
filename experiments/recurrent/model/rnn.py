@@ -9,7 +9,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from online_norm_pytorch import OnlineNorm1D
+from online_norm_pytorch import OnlineNorm1d
 
 
 """
@@ -98,8 +98,8 @@ class RNNCell(nn.RNNCellBase):
             self.reset_norm_parameters()
         elif norm == 'online_norm':
             warnings.warn('RNN Using OnlineNorm')
-            self.norm = OnlineNorm1D(
-                hidden_size, batch_size=kwargs['batch_size'],
+            self.norm = OnlineNorm1d(
+                hidden_size,
                 alpha_fwd=kwargs['alpha_fwd'], alpha_bkw=kwargs['alpha_bkw'], 
                 ecm=kwargs['ecm']
             )

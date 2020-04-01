@@ -8,7 +8,7 @@ import warnings
 import torch
 import torch.nn as nn
 
-from online_norm_pytorch import OnlineNorm2D
+from online_norm_pytorch import OnlineNorm2d
 
 
 class Identity(nn.Module):
@@ -22,9 +22,8 @@ class Identity(nn.Module):
 
 
 def norm(num_features, mode='batch', eps=1e-05, momentum=0.1, affine=True,
-         track_running_stats=True,
-         batch_size=None, alpha_fwd=0.999, alpha_bkw=0.99,
-         ecm='ls', ls_eps=1e-05, clamp_val=5, loop=False, **kwargs):
+         track_running_stats=True, alpha_fwd=0.999, alpha_bkw=0.99,
+         ecm='ls', ls_eps=1e-05, clamp_val=5, **kwargs):
     """
     Function which instantiates a normalization scheme based on mode
 
@@ -46,8 +45,6 @@ def norm(num_features, mode='batch', eps=1e-05, momentum=0.1, affine=True,
             using batch norm. Default: ``True``
     
     OnlineNorm Args:
-        batch_size: in order to speed up computation we need to know and fix the
-            batch size a priori.
         alpha_fwd: the decay factor to be used in fprop to update statistics.
             Default: 0.999
         alpha_bkw: the decay factor to be used in fprop to control the gradients
@@ -57,9 +54,6 @@ def norm(num_features, mode='batch', eps=1e-05, momentum=0.1, affine=True,
             Default: ls
         ls_eps: if ecm is `ls`, this is the `ls` eps. Default: 1e-05
         clamp_val: if ecm is `ac` this is the clamp value. Default: 5
-        loop: a boolean which trigers the looped variant of ControlNorm
-            regaurdless of batch size. Note: looped variant is enabled
-            automatically when batch_size = 1. Default: False
     """
 
     if mode == 'batch':
@@ -70,11 +64,10 @@ def norm(num_features, mode='batch', eps=1e-05, momentum=0.1, affine=True,
 
     elif mode == 'online':
         warnings.warn('Normalizer: Online')
-        normalizer = OnlineNorm2D(num_features, batch_size=batch_size,
+        normalizer = OnlineNorm2d(num_features,
                                   alpha_fwd=alpha_fwd, alpha_bkw=alpha_bkw, 
                                   eps=eps, affine=affine, ecm=ecm,
-                                  ls_eps=ls_eps, clamp_val=clamp_val,
-                                  loop=loop, **kwargs)
+                                  ls_eps=ls_eps, clamp_val=clamp_val, **kwargs)
 
     elif mode == 'none' or mode is None:
         warnings.warn('Normalizer: None')

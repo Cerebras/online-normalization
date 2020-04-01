@@ -155,7 +155,7 @@ class Norm2d(nn.Module):
             @staticmethod
             def forward(ctx, input):
                 (out, scale, self.m, self.var) = _C.norm_fwd(
-                    input, self.m, self.var, self.afwd, self.eps
+                    input.contiguous(), self.m, self.var, self.afwd, self.eps
                 )
                 ctx.save_for_backward(out, scale,)
                 return out
@@ -164,7 +164,7 @@ class Norm2d(nn.Module):
             def backward(ctx, grad_out):
                 out, scale, = ctx.saved_tensors
                 (grad_in, self.u, self.v) = _C.norm_bwd(
-                    grad_out, self.u, self.v, out, scale, self.abkw
+                    grad_out.contiguous(), self.u, self.v, out, scale, self.abkw
                 )
                 return grad_in
 

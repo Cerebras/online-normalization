@@ -177,6 +177,9 @@ class TestOnlineNorm2d(unittest.TestCase):
         alpha_fwd=0.99,
         alpha_bkw=0.9,
     ):
+        """
+        instantiate mixed / run precision layer
+        """
         if not torch.cuda.is_available():
             self.skipTest('Mixed Precision not implemented on CPU in PyTorch')
         

@@ -17,14 +17,14 @@ from .np_online_norm_1d import NpOnlineNorm1d
 logger = logging.getLogger(__name__)
 
 
-class TestOnlineNorm2D(unittest.TestCase):
+class TestOnlineNorm1D(unittest.TestCase):
     def test010_nuerical_comparison(
         self,
         batch_size=32,
         num_features=256,
         alpha_fwd=0.99,
         alpha_bkw=0.9,
-        itrs=2,
+        itrs=8,
     ):
         """
         numerical comparison of online norm pytorch (with cuda kernel) and numpy
@@ -98,7 +98,7 @@ class TestOnlineNorm2D(unittest.TestCase):
         num_features=256,
         alpha_fwd=0.99,
         alpha_bkw=0.9,
-        itrs=2,
+        itrs=8,
     ):
         """
         numerical comparison of online norm pytorch (c++ cpu implementation)
@@ -160,7 +160,7 @@ class TestOnlineNorm2D(unittest.TestCase):
             inputs.grad.zero_()
 
         logger.info(
-            'Algorithm implemented using cuda numerically matches '
+            'Algorithm implemented using cpp numerically matches '
             'numpy implementation'
         )
 
@@ -171,6 +171,9 @@ class TestOnlineNorm2D(unittest.TestCase):
         alpha_fwd=0.99,
         alpha_bkw=0.9,
     ):
+        """
+        instantiate mixed / run precision layer
+        """
         if not torch.cuda.is_available():
             self.skipTest('Mixed Precision not implemented on CPU in PyTorch')
         
