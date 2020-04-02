@@ -7,7 +7,7 @@ import torch.nn as nn
 import torch.utils.model_zoo as model_zoo
 
 from .norm import LayerNorm2d
-from online_norm_pytorch import OnlineNorm2D
+from online_norm_pytorch import OnlineNorm2d
 
 
 __all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
@@ -165,7 +165,7 @@ class ResNet(nn.Module):
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-            elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm, nn.InstanceNorm2d, LayerNorm2d, OnlineNorm2D)):
+            elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm, nn.InstanceNorm2d, LayerNorm2d, OnlineNorm2d)):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 

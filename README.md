@@ -14,7 +14,7 @@ with Online Normalization.
 
 ```bash
 cd ./online-norm/online-norm-pytorch
-pip install .
+python -m pip install -e .
 ```
 
 ## Usage
@@ -28,7 +28,7 @@ see `./online-norm/online-norm-pytorch`
 
 ```bash
 cd ./online-norm/online-norm-tf
-pip install .
+python -m pip install -e .
 ```
 
 ## Usage

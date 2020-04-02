@@ -12,6 +12,8 @@ import warnings
 import torch
 import torch.nn as nn
 
+from online_norm_pytorch import _C
+
 
 class LayerScaling(nn.Module):
     r"""Scales inputs by the root of the second moment for groups of channels.
@@ -91,7 +93,7 @@ class ActivationClamp(nn.Module):
         return torch.clamp(input, -self.clamp_value, self.clamp_value)
 
 
-class Norm2D(nn.Module):
+class Norm2d(nn.Module):
     r"""Applies Normalization (the per-channel exponential moving
     average, ema, forward and control process backward part of the Online
     Normalization algorithm) over a 4D input (a mini-batch of 3D inputs) as
@@ -124,7 +126,7 @@ class Norm2D(nn.Module):
 
     Examples::
 
-        >>> norm = Norm2D(128, 0.999, 0.99)
+        >>> norm = Norm2d(128, 0.999, 0.99)
         >>> input = torch.randn(64, 128, 32, 32)
         >>> output = norm(input)
     """
@@ -133,7 +135,7 @@ class Norm2D(nn.Module):
 
     def __init__(self, num_features,
                  alpha_fwd=0.999, alpha_bkw=0.99, eps=1e-05, **kwargs):
-        super(Norm2D, self).__init__()
+        super(Norm2d, self).__init__()
         self.num_features = num_features
         self.eps = eps
 
@@ -141,72 +143,29 @@ class Norm2D(nn.Module):
         self.abkw = alpha_bkw
 
         # self.m and self.var are the streaming mean and variance respectively
-        self.register_buffer('m', torch.zeros([num_features]))
-        self.register_buffer('var', torch.ones([num_features]))
+        self.register_buffer('m', torch.zeros([num_features], dtype=torch.float))
+        self.register_buffer('var', torch.ones([num_features], dtype=torch.float))
 
         # self.u and self.v are the control variables respectively
-        self.register_buffer('u', torch.zeros([num_features]))
-        self.register_buffer('v', torch.zeros([num_features]))
+        self.register_buffer('u', torch.zeros([num_features], dtype=torch.float))
+        self.register_buffer('v', torch.zeros([num_features], dtype=torch.float))
         self.init_norm_params()
 
         class Normalization(torch.autograd.Function):
             @staticmethod
             def forward(ctx, input):
-                afwd = self.afwd
-                out = torch.empty_like(input)
-                scale = torch.empty_like(input[:, :, 0, 0])
-
-                mu, var = self.moments(input)
-
-                for idx in range(input.size(0)):
-                    # fprop activations
-                    scale[idx] = torch.sqrt(self.var + self.eps).clone()
-                    _mu = self.m.unsqueeze(-1).unsqueeze(-1)
-                    _stddev = scale[idx].unsqueeze(-1).unsqueeze(-1)
-                    out[idx] = (input[idx] - _mu) / _stddev
-
-                    # Update statistics trackers
-                    self.var.data = (afwd * self.var +
-                                     (1 - afwd) * var[idx] +
-                                     (afwd * (1 - afwd) *
-                                      (mu[idx] - self.m) ** 2))
-                    self.m.data.add_((1 - afwd) * (mu[idx] - self.m))
-
-                # save for backwards
-                ctx.save_for_backward(out.clone(), scale.clone())
+                (out, scale, self.m, self.var) = _C.norm_fwd(
+                    input.contiguous(), self.m, self.var, self.afwd, self.eps
+                )
+                ctx.save_for_backward(out, scale,)
                 return out
 
             @staticmethod
             def backward(ctx, grad_out):
                 out, scale, = ctx.saved_tensors
-                abkw = self.abkw
-                grad_in = torch.empty_like(grad_out)
-
-                for idx in range(grad_out.size(0)):
-                    # ctrl grad_out with v controller
-                    grad_v_ctrl = (
-                        grad_out[idx] -
-                        (1 - abkw) * self.v.unsqueeze(-1).unsqueeze(-1) * out[idx]
-                    )
-
-                    # update v control variable
-                    self.v.data.add_(self.mean(grad_v_ctrl * out[idx]))
-
-                    # scale delta
-                    grad_scaled = (
-                        grad_v_ctrl /
-                        scale[idx].unsqueeze(-1).unsqueeze(-1)
-                    )
-
-                    # ctrl grad_scaled with u controller
-                    grad_in[idx] = (
-                        grad_scaled -
-                        (1 - abkw) * self.u.unsqueeze(-1).unsqueeze(-1)
-                    )
-
-                    # Update control variables
-                    self.u.data.add_(self.mean(grad_in[idx]))
-
+                (grad_in, self.u, self.v) = _C.norm_bwd(
+                    grad_out.contiguous(), self.u, self.v, out, scale, self.abkw
+                )
                 return grad_in
 
         self.normalizer = Normalization.apply
@@ -238,8 +197,10 @@ class Norm2D(nn.Module):
         if self.training:
             return self.normalizer(input)
         mu = self.m.unsqueeze(0).unsqueeze(-1).unsqueeze(-1)
-        var = self.var.unsqueeze(0).unsqueeze(-1).unsqueeze(-1)
-        return (input - mu) / torch.sqrt(var + self.eps)
+        std = torch.sqrt(
+            self.var.unsqueeze(0).unsqueeze(-1).unsqueeze(-1) + self.eps
+        ).type(input.type())
+        return (input - mu) / std
 
 
 def lin_momentum(mu_prev, mu_curr, mu_stream,
@@ -271,7 +232,7 @@ def conv_alongb_w1(input, b, c):
     """
     helper functions for fast lin_crtls
     Convolve along 2b dimension with a b length vector of 1's
-
+    
     assumes order (b, 2b, c)
     """
     input = input.transpose(0, 1).clone().view(2 * b, -1).t().unsqueeze(1)
@@ -361,7 +322,7 @@ def lin_crtl(delta, out, b_size, num_features, v_p, alpha_p, beta_p,
     )
 
 
-class Norm2DBatched(nn.Module):
+class Norm2dBatched(nn.Module):
     r"""Applies Normalization (the per-channel exponential moving
     average, ema, forward and control process backward part of the Online
     Normalization algorithm) over a 4D input (a mini-batch of 3D inputs) as
@@ -375,6 +336,7 @@ class Norm2DBatched(nn.Module):
             \alpha_fwd * \sigma^2_{t-1} +
             \alpha_fwd * (1 - \alpha_fwd) * (x_t - \mu_{t-1}) ^ 2
         )
+
         \mu_t = \alpha_fwd * \mu_{t-1} + (1 - \alpha_fwd) * x_t
 
     The mean and standard-deviation are estimated per-channel.
@@ -400,7 +362,6 @@ class Norm2DBatched(nn.Module):
         - Output: :math:`(N, C, H, W)` (same shape as input)
 
     Examples::
-
         >>> B, C = 32, 256
         >>> norm = Norm2DBatched(C, B, 0.999, 0.99)
         >>> input = torch.randn(B, C, 32, 32)
@@ -411,7 +372,12 @@ class Norm2DBatched(nn.Module):
 
     def __init__(self, num_features, batch_size,
                  alpha_fwd=0.999, alpha_bkw=0.99, eps=1e-05, **kwargs):
-        super(Norm2DBatched, self).__init__()
+        super(Norm2dBatched, self).__init__()
+
+        warnings.warn(
+                'Deprecated Warning: Use kernel instead.'
+            )
+
         assert isinstance(batch_size, int), 'batch_size must be an integer'
         assert batch_size > 0, 'batch_size must be greater than 0'
         self.num_features = num_features
@@ -545,18 +511,18 @@ class Norm2DBatched(nn.Module):
         return (input - mu) / torch.sqrt(var + self.eps)
 
 
-class OnlineNorm2D(nn.Module):
+class OnlineNorm2d(nn.Module):
     r"""Applies Online Normalization over a 4D input (a mini-batch of 3D
     inputs) as described in the paper:
     `Online Normalization for Training Neural Networks`.
 
     .. math::
-        y_t = LayerScaling(Norm2D(x_t) * \gamma + \beta)
+        y_t = LayerScaling(Norm2d(x_t) * \gamma + \beta)
 
     Args:
         num_features: :math:`L` from an expected input of size :math:`(N, L)`
-        batch_size: in order to speed up computation we need to know and fix the
-            batch size a priori.
+        batch_size: Deprecated with Norm2DBatched. in order to speed up computation
+            we need to know and fix the batch size a priori.
         alpha_fwd: the decay factor to be used in fprop to update statistics.
             Default: 0.999
         alpha_bkw: the decay factor to be used in fprop to control the gradients
@@ -570,9 +536,6 @@ class OnlineNorm2D(nn.Module):
             Default: ls
         ls_eps: if ecm is `ls`, this is the `ls` eps. Default: 1e-05
         clamp_val: if ecm is `ac` this is the clamp value. Default: 5
-        batch_acceleration: enable batch accelerated variant of norm. Requires
-            knowing the batch size apriori. Automatically diabled if batch size
-            is 1 or None. Default: ``True``
 
     Shape:
         - Input: :math:`(N, C, H, W)`
@@ -581,11 +544,9 @@ class OnlineNorm2D(nn.Module):
     Examples::
 
         >>> # With Learnable Parameters
-        >>> norm = OnlineNorm2D(128, batch_size=64)
+        >>> norm = OnlineNorm2d(128)
         >>> # Without Learnable Parameters
-        >>> norm = OnlineNorm2D(128, batch_size=64, affine=False)
-        >>> # With Norm2D with loops
-        >>> norm = OnlineNorm2D(128)
+        >>> norm = OnlineNorm2d(128, affine=False)
         >>> input = torch.randn(64, 128, 32, 32)
         >>> output = norm(input)
     """
@@ -593,26 +554,21 @@ class OnlineNorm2D(nn.Module):
 
     def __init__(self, num_features, batch_size=None,
                  alpha_fwd=0.999, alpha_bkw=0.99, eps=1e-05,
-                 affine=True, ecm='ac', ls_eps=1e-05, clamp_val=5,
-                 batch_acceleration=True, **kwargs):
-        super(OnlineNorm2D, self).__init__()
+                 affine=True, ecm='ac', ls_eps=1e-05, clamp_val=5, **kwargs):
+        super(OnlineNorm2d, self).__init__()
         self.num_features = num_features
 
+        batch_acceleration = True
         if batch_size is None or batch_size == 1:
             batch_acceleration = False
 
         if batch_acceleration:
-            self.norm = Norm2DBatched(num_features, batch_size,
+            self.norm = Norm2dBatched(num_features, batch_size,
                                       alpha_fwd=alpha_fwd,
                                       alpha_bkw=alpha_bkw,
                                       eps=eps)
         else:
-            warnings.warn(
-                'Running looped variant of OnlineNorm, '
-                'if using batched training, '
-                'pass batch_size paramter to accelerate training.'
-            )
-            self.norm = Norm2D(num_features,
+            self.norm = Norm2d(num_features,
                                alpha_fwd=alpha_fwd,
                                alpha_bkw=alpha_bkw,
                                eps=eps)
@@ -625,7 +581,7 @@ class OnlineNorm2D(nn.Module):
             warnings.warn('Using ActivationClamping in Online Normalization')
         else:
             warnings.warn(
-                'No guards on statistical estimates of OnlineNorm,'
+                'No guards on statistical estimates of OnlineNorm, '
                 'possible options: ls | ac'
             )
             self.ecm = None
@@ -647,9 +603,9 @@ class OnlineNorm2D(nn.Module):
         out = self.norm(input)
         # scale output
         if self.weight is not None:
-            out = out * self.weight.unsqueeze(0).unsqueeze(-1).unsqueeze(-1)
+            out = out * self.weight.type(out.type()).unsqueeze(0).unsqueeze(-1).unsqueeze(-1)
         # add bias
         if self.bias is not None:
-            out = out + self.bias.unsqueeze(0).unsqueeze(-1).unsqueeze(-1)
+            out = out + self.bias.type(out.type()).unsqueeze(0).unsqueeze(-1).unsqueeze(-1)
         # guard for numerical stability of statistical estimates in OnlineNorm
         return self.ecm(out) if self.ecm is not None else out

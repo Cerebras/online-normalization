@@ -6,7 +6,7 @@ All rights reserved.
 import torch.nn as nn
 
 from .norm import LayerNorm1d
-from online_norm_pytorch import OnlineNorm1D
+from online_norm_pytorch import OnlineNorm1d
 
 __all__ = ['MLP_Model', 'mlp_model']
 
@@ -52,7 +52,7 @@ class MLP_Model(nn.Module):
 
 
         for m in self.modules():
-            if isinstance(m, (nn.BatchNorm1d, nn.GroupNorm, LayerNorm1d, OnlineNorm1D)):
+            if isinstance(m, (nn.BatchNorm1d, nn.GroupNorm, LayerNorm1d, OnlineNorm1d)):
                 if m.weight is not None:
                     nn.init.constant_(m.weight, 1)
                 if m.bias is not None:

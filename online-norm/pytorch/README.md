@@ -5,8 +5,16 @@ This folder holds the 1d and 2d [Online Normalization Algorithm](https://arxiv.o
 ## Installation
 
 ```bash
-pip install .
+python -m pip install -e .
 ```
+
+### Environment
+My enviornment uses is set up with:
+```bash
+conda install pytorch==1.1.0 torchvision==0.3.0 cudatoolkit=10.0 -c pytorch
+conda install -c psi4 gcc-5
+```
+Note: PyTorch is built with gcc5 so I needed to update my gcc to build this such that it interfaces with PyTorch well
 
 ## Usage
 
@@ -39,14 +47,10 @@ output = norm(input)
 
 ## Testing installation
 
-The test uses [Nose](https://nose.readthedocs.io/en/latest/) testing framework.
 To test after installation:
 ```bash
-python setup.py test
-```
-or
-```bash
-nosetests
+python -m tests.test_online_norm_1d
+python -m tests.test_online_norm_2d
 ```
 
 ## change log
@@ -56,3 +60,9 @@ nosetests
 #### Added
 
 - Added [activation clamping](LinkToActClampPaper) as an error checking mechanism (ecm) and make it the default ecm.
+
+### 2020-04-01
+
+#### Added
+
+- Added CUDA kernel for online norm (removed python loop version of norm, deprecate BON)

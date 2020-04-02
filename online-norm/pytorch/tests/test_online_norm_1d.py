@@ -6,122 +6,204 @@ All rights reserved.
 
 This module tests the Online Normalization module
 """
-import time
+import os
+import sys
 import logging
 import unittest
 import numpy as np
 import torch
 
-from online_norm_pytorch import OnlineNorm1D
+from online_norm_pytorch import OnlineNorm1d
+
+sys.path.append(os.path.dirname(os.path.abspath(__file__)) + "/../..")
+from numpy_on import OnlineNorm1d as NpOnlineNorm1d
+
+logger = logging.getLogger(__name__)
 
 
-class TestOnlineNorm1D(unittest.TestCase):
-    """
-    This is the test class which implements the Online Normalization module's
-    test
-    """
-    logger = logging.getLogger('test_logger')
+class TestOnlineNorm1d(unittest.TestCase):
+    def test010_nuerical_comparison(
+        self,
+        batch_size=32,
+        num_features=256,
+        alpha_fwd=0.99,
+        alpha_bkw=0.9,
+        itrs=8,
+    ):
+        """
+        numerical comparison of online norm pytorch (with cuda kernel) and numpy
+        """
+        if not torch.cuda.is_available():
+            self.skipTest('CUDA kernel not tested')
+            
+        device = torch.device('cuda')  # device object representing GPU
 
-    def test010_similarity(self, batch_size=4, dim=1024,
-                           alpha_fwd=0.999, alpha_bkw=0.99, eps=1e-05, itrs=4):
-        """ numerical similarity for online norm linearized vs loops """
-        # instantiate inputs
-        input = torch.randn(batch_size, dim)
-        input_0 = input.clone().detach().requires_grad_(True)
-        input_1 = input.clone().detach().requires_grad_(True)
+        # create inputs
+        input = torch.randn(batch_size, num_features) + .25
+        np_inputs = input.clone().detach().numpy()
+        inputs = input.clone().detach().to(device).requires_grad_(True)
         # instantiate gradient at the output
-        grad_out = torch.randn(batch_size, dim)
+        grad_out = torch.randn(batch_size, num_features) + .125
+        np_grad_out = grad_out.clone().detach().numpy()
+        grad_out = grad_out.clone().detach().to(device).requires_grad_(True)
 
-        # instantiate Linearized Online Norm class
-        onlin = OnlineNorm1D(dim, batch_size,
-                             alpha_fwd=alpha_fwd, alpha_bkw=alpha_bkw, eps=eps)
+        # instantiate layer
+        norm = OnlineNorm1d(
+            num_features,
+            alpha_fwd=alpha_fwd,
+            alpha_bkw=alpha_bkw,
+            ecm='',
+            affine=False
+        ).to(device)
 
-        # instantiate Looping Online Norm class
-        onloop = OnlineNorm1D(dim,
-                              alpha_fwd=alpha_fwd, alpha_bkw=alpha_bkw, eps=eps)
+        np_norm = NpOnlineNorm1d(
+            num_features,
+            alpha_fwd=alpha_fwd,
+            alpha_bkw=alpha_bkw,
+            affine=False,
+            ecm=''
+        )
 
-        for _ in range(itrs):
+        for itr in range(itrs):
             # fprop through Linearized Online Norm class
-            y_0 = onlin(input_0)
+            out = norm(inputs)
             # bprop through Linearized Online Norm class
-            y_0.backward(grad_out)
+            out.backward(grad_out)
             # fprop through Looping Online Norm class
-            y_1 = onloop(input_1)
+            np_out = np_norm(np_inputs)
             # bprop through Looping Online Norm class
-            y_1.backward(grad_out)
+            np_grad_in = np_norm.backward(np_grad_out)
 
             # numerically compare output
-            np.testing.assert_allclose(y_0.detach().numpy(),
-                                       y_1.detach().numpy(),
-                                       rtol=1e-4, atol=1e-5)
+            err_msg=f'output comparison failed on itr: {itr}'
+            np.testing.assert_allclose(
+                out.detach().cpu().numpy(),
+                np_out,
+                rtol=1e-5, atol=1e-6, err_msg=err_msg
+            )
             # numerically grad_in
-            np.testing.assert_allclose(input_0.grad.detach().numpy(),
-                                       input_1.grad.detach().numpy(),
-                                       rtol=1e-4, atol=1e-5)
+            err_msg=f'grad_in comparison failed on itr: {itr}'
+            np.testing.assert_allclose(
+                inputs.grad.detach().cpu().numpy(),
+                np_grad_in,
+                rtol=1e-5, atol=1e-6, err_msg=err_msg
+            )
 
-        self.logger.info('Algorithm implemented using linearization of ops '
-                         'numerically matches algorithm implemented with '
-                         'loops')
+            inputs.grad.zero_()
 
-    def test020_speed(self, batch_size=64, dim=1024,
-                      alpha_fwd=0.999, alpha_bkw=0.99, eps=1e-05, epoch=100):
+        logger.info(
+            'Algorithm implemented using cuda numerically matches '
+            'numpy implementation'
+        )
+
+    def test020_nuerical_comparison(
+        self,
+        batch_size=32,
+        num_features=256,
+        alpha_fwd=0.99,
+        alpha_bkw=0.9,
+        itrs=8,
+    ):
         """
-        Speed test online norm linearized vs loops
-        Note: this test doesn't check anything it helps the user choose a
-            algorithm configuration based on use case.
+        numerical comparison of online norm pytorch (c++ cpu implementation)
+        and numpy
         """
-        input = torch.randn(batch_size, dim)
+        device = torch.device('cpu')  # device object representing CPU
 
-        # instantiate Linearized Online Norm class
-        onlin = OnlineNorm1D(dim, batch_size,
-                             alpha_fwd=alpha_fwd, alpha_bkw=alpha_bkw, eps=eps)
+        # create inputs
+        input = torch.randn(batch_size, num_features) + .25
+        np_inputs = input.clone().detach().numpy()
+        inputs = input.clone().detach().to(device).requires_grad_(True)
+        # instantiate gradient at the output
+        grad_out = torch.randn(batch_size, num_features) + .125
+        np_grad_out = grad_out.clone().detach().numpy()
+        grad_out = grad_out.clone().detach().to(device).requires_grad_(True)
 
-        # time lin algo
-        forward = 0
-        backward = 0
-        for _ in range(epoch):
-            start = time.time()
-            # fprop through lin algo
-            out = onlin(input)
-            forward += time.time() - start
+        # instantiate layer
+        norm = OnlineNorm1d(
+            num_features,
+            alpha_fwd=alpha_fwd,
+            alpha_bkw=alpha_bkw,
+            ecm='',
+            affine=False
+        ).to(device)
 
-            start = time.time()
-            # bprop through lin algo
-            out.sum().backward()
-            backward += time.time() - start
+        np_norm = NpOnlineNorm1d(
+            num_features,
+            alpha_fwd=alpha_fwd,
+            alpha_bkw=alpha_bkw,
+            affine=False,
+            ecm=''
+        )
 
-        self.logger.info(f'Linearized Control Normalization Speed Test: '
-                         f'Forward {forward * 1e6/1e5:.3f} us | '
-                         f'Backward {backward * 1e6/1e5:.3f} us | '
-                         f'Total {(forward + backward) * 1e6/1e5:.3f} us')
+        for itr in range(itrs):
+            # fprop through Linearized Online Norm class
+            out = norm(inputs)
+            # bprop through Linearized Online Norm class
+            out.backward(grad_out)
+            # fprop through Looping Online Norm class
+            np_out = np_norm(np_inputs)
+            # bprop through Looping Online Norm class
+            np_grad_in = np_norm.backward(np_grad_out)
 
-        # Speed test online norm
-        # instantiate Looping Online Norm class
-        onloop = OnlineNorm1D(dim,
-                              alpha_fwd=alpha_fwd, alpha_bkw=alpha_bkw, eps=eps)
+            # numerically compare output
+            err_msg=f'output comparison failed on itr: {itr}'
+            np.testing.assert_allclose(
+                out.detach().cpu().numpy(),
+                np_out,
+                rtol=1e-5, atol=1e-6, err_msg=err_msg
+            )
+            # numerically grad_in
+            err_msg=f'grad_in comparison failed on itr: {itr}'
+            np.testing.assert_allclose(
+                inputs.grad.detach().cpu().numpy(),
+                np_grad_in,
+                rtol=1e-5, atol=1e-6, err_msg=err_msg
+            )
 
-        # time loop algo
-        forward = 0
-        backward = 0
-        for _ in range(epoch):
-            start = time.time()
-            # fprop through loop algo
-            out = onloop(input)
-            forward += time.time() - start
+            inputs.grad.zero_()
 
-            start = time.time()
-            # bprop through loop algo
-            out.sum().backward()
-            backward += time.time() - start
+        logger.info(
+            'Algorithm implemented using cpp numerically matches '
+            'numpy implementation'
+        )
 
-        self.logger.info(f'Loop Normalization Speed Test: '
-                         f'Forward {forward * 1e6/1e5:.3f} us | '
-                         f'Backward {backward * 1e6/1e5:.3f} us | '
-                         f'Total {(forward + backward) * 1e6/1e5:.3f} us')
+    def test030_mixedprecision(
+        self,
+        batch_size=32,
+        num_features=256,
+        alpha_fwd=0.99,
+        alpha_bkw=0.9,
+    ):
+        """
+        instantiate mixed / run precision layer
+        """
+        if not torch.cuda.is_available():
+            self.skipTest('Mixed Precision not implemented on CPU in PyTorch')
+        
+        device = torch.device('cuda')  # device object representing GPU
 
-        self.logger.info('Make input tensors representative of size you will '
-                         'use and then use the correct algorithm based on '
-                         'speed of execution.')
+        # create half precision inputs
+        inputs = (
+            torch.randn(
+                batch_size,
+                num_features,
+                requires_grad=True,
+                device=device
+            ) + .25
+        ).half()
+
+        # instantiate layer
+        norm = OnlineNorm1d(
+            num_features,
+            alpha_fwd=alpha_fwd,
+            alpha_bkw=alpha_bkw,
+            ecm='ac'
+        ).to(device)
+
+        out = norm(inputs)          # norm fwd
+        torch.cuda.synchronize()
+        out.sum().backward()        # compute psudo loss and norm bwd
 
 
 if __name__ == '__main__':

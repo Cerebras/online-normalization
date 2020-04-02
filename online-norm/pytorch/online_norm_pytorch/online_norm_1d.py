@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+#!/usr/bin/env python
 """
 Released under BSD 3-Clause License,
 Copyright (c) 2019 Cerebras Systems Inc.
@@ -12,8 +12,10 @@ import warnings
 import torch
 import torch.nn as nn
 
+from online_norm_pytorch import _C
 
-class LayerScaling1D(nn.Module):
+
+class LayerScaling1d(nn.Module):
     r"""Scales inputs by the root of the second moment for groups.
     
     .. math::
@@ -31,12 +33,12 @@ class LayerScaling1D(nn.Module):
 
     Examples::
 
-        >>> ls = LayerScaling1D()
+        >>> ls = LayerScaling1d()
         >>> input = torch.randn(64, 128)
         >>> output = ls(input)
     """
     def __init__(self, group_size=-1, eps=1e-5):
-        super(LayerScaling1D, self).__init__()
+        super(LayerScaling1d, self).__init__()
         self.eps = eps
         self.group_size = group_size
 
@@ -90,10 +92,10 @@ class ActivationClamp(nn.Module):
         return torch.clamp(input, -self.clamp_value, self.clamp_value)
 
 
-class Norm1D(nn.Module):
+class Norm1d(nn.Module):
     r"""Applies Normalization (the per feature exponential moving
     average, ema, forward and control process backward part of the Online
-    Normalization algorithm) over a 2D input (a mini-batch of 1D inputs) as
+    Normalization algorithm) over a 2D input (a mini-batch of 1d inputs) as
     described in the paper:
     `Online Normalization for Training Neural Networks`.
 
@@ -124,7 +126,7 @@ class Norm1D(nn.Module):
 
     Examples::
 
-        >>> norm = Norm1D(100, 0.999, 0.99)
+        >>> norm = Norm1d(100, 0.999, 0.99)
         >>> input = torch.randn(20, 100)
         >>> output = norm(input)
     """
@@ -133,7 +135,7 @@ class Norm1D(nn.Module):
 
     def __init__(self, num_features,
                  alpha_fwd=0.999, alpha_bkw=0.99, eps=1e-05):
-        super(Norm1D, self).__init__()
+        super(Norm1d, self).__init__()
         self.num_features = num_features
         self.eps = eps
 
@@ -141,59 +143,29 @@ class Norm1D(nn.Module):
         self.abkw = alpha_bkw
 
         # self.m and self.var are the streaming mean and variance respectively
-        self.register_buffer('m', torch.zeros([num_features]))
-        self.register_buffer('var', torch.ones([num_features]))
+        self.register_buffer('m', torch.zeros([num_features], dtype=torch.float))
+        self.register_buffer('var', torch.ones([num_features], dtype=torch.float))
 
         # self.u and self.v are the control variables respectively
-        self.register_buffer('u', torch.zeros([num_features]))
-        self.register_buffer('v', torch.zeros([num_features]))
+        self.register_buffer('u', torch.zeros([num_features], dtype=torch.float))
+        self.register_buffer('v', torch.zeros([num_features], dtype=torch.float))
         self.init_norm_params()
 
         class Normalization(torch.autograd.Function):
             @staticmethod
             def forward(ctx, input):
-                afwd = self.afwd
-                out = torch.empty_like(input)
-                scale = torch.empty_like(input)
-
-                for idx in range(input.size(0)):
-                    # fprop activations
-                    scale[idx] = torch.sqrt(self.var + self.eps).clone()
-                    out[idx] = (input[idx] - self.m) / scale[idx]
-
-                    # Update statistics trackers
-                    self.var.data = (afwd * self.var +
-                                     (afwd * (1 - afwd) * (input[idx] - self.m) ** 2))
-
-                    self.m.data.add_((1 - afwd) * (input[idx] - self.m))
-
-                # save for backwards
-                ctx.save_for_backward(out.clone(), scale.clone())
+                (out, scale, self.m, self.var) = _C.norm_fwd(
+                    input.contiguous(), self.m, self.var, self.afwd, self.eps
+                )
+                ctx.save_for_backward(out, scale,)
                 return out
 
             @staticmethod
             def backward(ctx, grad_out):
                 out, scale, = ctx.saved_tensors
-                abkw = self.abkw
-                grad_in = torch.empty_like(grad_out)
-
-                for idx in range(grad_out.size(0)):
-
-                    # ctrl grad_out with v controller
-                    grad_v_ctrl = grad_out[idx] - (1 - abkw) * self.v * out[idx]
-
-                    # update v control variable
-                    self.v.data.add_(grad_v_ctrl * out[idx])
-
-                    # scale delta
-                    grad_scaled = grad_v_ctrl / scale[idx]
-
-                    # ctrl grad_scaled with u controller
-                    grad_in[idx] = grad_scaled - (1 - abkw) * self.u
-
-                    # Update control variables
-                    self.u.data.add_(grad_in[idx])
-
+                (grad_in, self.u, self.v) = _C.norm_bwd(
+                    grad_out.contiguous(), self.u, self.v, out, scale, self.abkw
+                )
                 return grad_in
 
         self.normalizer = Normalization.apply
@@ -212,9 +184,9 @@ class Norm1D(nn.Module):
     def forward(self, input):
         if self.training:
             return self.normalizer(input)
-        mu = self.m.unsqueeze(0)
-        var = self.var.unsqueeze(0)
-        return (input - mu) / torch.sqrt(var + self.eps)
+        mu = self.m.type(input.type()).unsqueeze(0)
+        std = torch.sqrt(self.var.unsqueeze(0) + self.eps).type(input.type())
+        return (input - mu) / std
 
 
 def lin_momentum(mu_prev, mu_curr, mu_stream,
@@ -315,7 +287,7 @@ def lin_crtl(delta, out, b_size, num_features, v_p, alpha_p, beta_p,
     )
 
 
-class Norm1DBatched(nn.Module):
+class Norm1dBatched(nn.Module):
     r"""Applies Normalization (the per feature exponential moving
     average, ema, forward and control process backward part of the Online
     Normalization algorithm) over a 2D input (a mini-batch of 1D inputs) as
@@ -331,6 +303,7 @@ class Norm1DBatched(nn.Module):
             \alpha_fwd * \sigma^2_{t-1} +
             \alpha_fwd * (1 - \alpha_fwd) * (x_t - \mu_{t-1}) ^ 2
         )
+
         \mu_t = \alpha_fwd * \mu_{t-1} + (1 - \alpha_fwd) * x_t
 
     The mean and standard-deviation are estimated per-feature.
@@ -357,9 +330,8 @@ class Norm1DBatched(nn.Module):
         - Output: :math:`(N, L)` (same shape as input)
 
     Examples::
-
         >>> B, C = 32, 256
-        >>> norm = Norm1DBatched(C, B, 0.999, 0.99)
+        >>> norm = Norm1dBatched(C, B, 0.999, 0.99)
         >>> input = torch.randn(B, C)
         >>> output = norm(input)
     """
@@ -368,7 +340,12 @@ class Norm1DBatched(nn.Module):
 
     def __init__(self, num_features, batch_size,
                  alpha_fwd=0.999, alpha_bkw=0.99, eps=1e-05):
-        super(Norm1DBatched, self).__init__()
+        super(Norm1dBatched, self).__init__()
+        
+        warnings.warn(
+                'Deprecated Warning: Use kernel instead.'
+            )
+
         assert isinstance(batch_size, int), 'batch_size must be an integer'
         assert batch_size > 0, 'batch_size must be greater than 0'
         self.num_features = num_features
@@ -488,18 +465,18 @@ class Norm1DBatched(nn.Module):
         return (input - mu) / torch.sqrt(var + self.eps)
 
 
-class OnlineNorm1D(nn.Module):
-    r"""Applies Online Normalization over a 2D input (a mini-batch of 1D
+class OnlineNorm1d(nn.Module):
+    r"""Applies Online Normalization over a 2D input (a mini-batch of 1d
     inputs) as described in the paper:
     `Online Normalization for Training Neural Networks`.
 
     .. math::
-        y_t = LayerScaling1D(Norm1D(x_t) * \gamma + \beta)
+        y_t = LayerScaling1d(Norm1d(x_t) * \gamma + \beta)
 
     Args:
         num_features: :math:`L` from an expected input of size :math:`(N, L)`
-        batch_size: in order to speed up computation we need to know and fix the
-            batch size a priori.
+        batch_size: Deprecated with Norm1DBatched. in order to speed up computation
+            we need to know and fix the batch size a priori.
         alpha_fwd: the decay factor to be used in fprop to update statistics.
             Default: 0.999
         alpha_bkw: the decay factor to be used in fprop to control the gradients
@@ -513,9 +490,6 @@ class OnlineNorm1D(nn.Module):
             Default: ls
         ls_eps: if ecm is `ls`, this is the `ls` eps. Default: 1e-05
         clamp_val: if ecm is `ac` this is the clamp value. Default: 5
-        batch_acceleration: enable batch accelerated variant of norm. Requires
-            knowing the batch size apriori. Automatically diabled if batch size
-            is 1 or None. Default: ``True``
 
     Shape:
         - Input: :math:`(N, L)`
@@ -524,11 +498,9 @@ class OnlineNorm1D(nn.Module):
     Examples::
 
         >>> # With Learnable Parameters
-        >>> norm = OnlineNorm1D(128, batch_size=64)
+        >>> norm = OnlineNorm1d(128)
         >>> # Without Learnable Parameters
-        >>> norm = OnlineNorm1D(128, batch_size=64, affine=False)
-        >>> # With Norm1D with loops
-        >>> norm = OnlineNorm1D(128)
+        >>> norm = OnlineNorm1d(128, affine=False)
         >>> input = torch.randn(64, 128)
         >>> output = norm(input)
     """
@@ -536,39 +508,34 @@ class OnlineNorm1D(nn.Module):
 
     def __init__(self, num_features, batch_size=None,
                  alpha_fwd=0.999, alpha_bkw=0.99, eps=1e-05,
-                 affine=True, ecm='ac', ls_eps=1e-05, clamp_val=5,
-                 batch_acceleration=True, **kwargs):
-        super(OnlineNorm1D, self).__init__()
+                 affine=True, ecm='ac', ls_eps=1e-05, clamp_val=5, **kwargs):
+        super(OnlineNorm1d, self).__init__()
         self.num_features = num_features
 
+        batch_acceleration = True
         if batch_size is None or batch_size == 1:
             batch_acceleration = False
 
         if batch_acceleration:
-            self.norm = Norm1DBatched(num_features, batch_size,
+            self.norm = Norm1dBatched(num_features, batch_size,
                                       alpha_fwd=alpha_fwd,
                                       alpha_bkw=alpha_bkw,
                                       eps=eps)
         else:
-            warnings.warn(
-                'Running looped variant of OnlineNorm, '
-                'if using batched training, '
-                'pass batch_size paramter to accelerate training.'
-            )
-            self.norm = Norm1D(num_features,
+            self.norm = Norm1d(num_features,
                                alpha_fwd=alpha_fwd,
                                alpha_bkw=alpha_bkw,
                                eps=eps)
 
         if ecm.lower() == 'ls':
-            self.ecm = LayerScaling1D(eps=ls_eps, **kwargs)
+            self.ecm = LayerScaling1d(eps=ls_eps, **kwargs)
             warnings.warn('Using LayerScaling in Online Normalization')
         elif ecm.lower() == 'ac':
             self.ecm = ActivationClamp(clamp_val)
             warnings.warn('Using ActivationClamping in Online Normalization')
         else:
             warnings.warn(
-                'No guards on statistical estimates of OnlineNorm,'
+                'No guards on statistical estimates of OnlineNorm, '
                 'possible options: ls | ac'
             )
             self.ecm = None
@@ -590,9 +557,9 @@ class OnlineNorm1D(nn.Module):
         out = self.norm(input)
         # scale output
         if self.weight is not None:
-            out = out * self.weight.unsqueeze(0)
+            out = out * self.weight.type(out.type()).unsqueeze(0)
         # add bias
         if self.bias is not None:
-            out = out + self.bias.unsqueeze(0)
+            out = out + self.bias.type(out.type()).unsqueeze(0)
         # guard for numerical stability of statistical estimates in OnlineNorm
         return self.ecm(out) if self.ecm is not None else out

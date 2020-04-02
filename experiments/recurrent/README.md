@@ -126,3 +126,11 @@ python ptb_main.py /path/to/data --emsize 650 --nhid 650 --dropout 0.5
 python ptb_main.py /path/to/data --emsize 1500 --nhid 1500 --dropout 0.65 --not-tied
 python ptb_main.py /path/to/data --emsize 1500 --nhid 1500 --dropout 0.65
 ```
+
+## change log
+
+### 2020-04-01
+
+#### Note
+
+- Linearized online norm introduces eps value which stabalizes training, Reccurent Experiments continue to use Linearized online norm implementation.

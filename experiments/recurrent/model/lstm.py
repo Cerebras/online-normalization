@@ -9,7 +9,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from online_norm_pytorch import OnlineNorm1D
+from online_norm_pytorch import OnlineNorm1d
 
 """
 Implementation of LSTM in pytorch
@@ -171,7 +171,7 @@ class NormLSTMCell(nn.RNNCellBase):
         elif norm[0].lower() == 'o':
             warnings.warn('Using Online Norm in LSTMCell')
             self.norms = [
-                OnlineNorm1D(hidden_size, batch_size=kwargs['batch_size'],
+                OnlineNorm1d(hidden_size, batch_size=kwargs['batch_size'],
                              alpha_fwd=kwargs['alpha_fwd'],
                              alpha_bkw=kwargs['alpha_bkw'], 
                              ecm=kwargs['ecm']) for _ in range(num_norms)]

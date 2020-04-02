@@ -28,9 +28,10 @@ def main_worker(train_loader, val_loader, ntokens, args, device):
                     'norm': args.norm_mode,
                     'alpha_fwd': args.afwd,
                     'alpha_bkw': args.abkw,
-                    'batch_size': args.batch_size,
+                    'batch_size': args.batch_size,  # Deprecated
                     'ecm': args.ecm,
-                    'cell_norm': args.cell_norm }
+                    'cell_norm': args.cell_norm,
+                    }
 
     # create model
     print("=> creating model: '{}'".format(args.ru_type))

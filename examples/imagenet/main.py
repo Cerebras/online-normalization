@@ -424,13 +424,11 @@ def accuracy(output, target, topk=(1,)):
         return res
 
 
-def online_norm(num_features, batch_size=args.batch_size,
-                alpha_fwd=0.999, alpha_bkw=0.99, eps=1e-05,
-                affine=True, ecm='ls', **kwargs):
+def online_norm(num_features, alpha_fwd=0.999, alpha_bkw=0.99,
+                eps=1e-05, affine=True, ecm='ls', **kwargs):
     """ Function which instantiates Online Norm Layer """
-    return OnlineNorm2D(num_features, batch_size=batch_size,
-                 alpha_fwd=alpha_fwd, alpha_bkw=alpha_bkw, eps=eps,
-                 affine=affine, ecm=ecm, **kwargs)
+    return OnlineNorm2D(num_features, alpha_fwd=alpha_fwd, alpha_bkw=alpha_bkw,
+                        eps=eps, affine=affine, ecm=ecm, **kwargs)
 
 
 if __name__ == '__main__':

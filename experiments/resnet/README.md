@@ -233,3 +233,11 @@ optional arguments:
                         number of groups in group norm if using group norm as
                         normalization method (default: 8)
 ```
+
+## change log
+
+### 2020-04-01
+
+#### Added
+
+- Added CUDA kernel for online norm experiments instead of using linearized online norm implementation
