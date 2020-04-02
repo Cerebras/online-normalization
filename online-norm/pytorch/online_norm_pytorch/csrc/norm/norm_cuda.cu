@@ -142,7 +142,7 @@ __global__ void norm_uctrl_kernel(
 
 __device__ void warp_reduce(volatile float *s_mem, const unsigned int t_id, const unsigned int d) {
   for (unsigned int ridx = 32; ridx > 0; ridx /= 2) {
-    if (d > ridx) { if (t_id < ridx) { if ((t_id + ridx) < d) { s_mem[t_id] += s_mem[t_id + ridx]; } } }
+    if (d > ridx) { if (t_id < ridx) { if ((t_id + ridx) < d) { s_mem[t_id] += s_mem[t_id + ridx]; } } __syncwarp(); }
   }
 }
 
@@ -167,7 +167,7 @@ __global__ void norm_vctrl_kernel(
     for (idx = t_id; idx < D; idx += d) {
       idx3 = Idx3(n, c, idx, N, C, D);              // idx in global mem
       // vctrl logic
-      grad_tmp[idx3] = grad_out[idx3] - (1. - abkw) * (scalar_t)(s_v[c]) * out[idx3];
+      grad_tmp[idx3] = grad_out[idx3] - (1. - (scalar_t)(abkw)) * (scalar_t)(s_v[c]) * out[idx3];
       s_mem[t_id] += (float)(grad_tmp[idx3]) * (float)(out[idx3]);    // start reduction
     };  
     __syncthreads();
@@ -179,9 +179,9 @@ __global__ void norm_vctrl_kernel(
     if (t_id < 32) { warp_reduce(s_mem, t_id, d); }     // reduce within warp
 
     // update vctrl / mv reduction to global mem
-    if (t_id == 0) { s_v[c] += (s_mem[0] / D); };
+    if (t_id == 0) { s_v[c] += (s_mem[0] / D); }
     __syncthreads();
-  };
+  }
   __syncthreads();
 }
 
