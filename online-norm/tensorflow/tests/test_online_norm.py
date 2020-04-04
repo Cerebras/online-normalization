@@ -83,7 +83,8 @@ class OnlineNormTest(unittest.TestCase):
 
         inputs = tf.placeholder(tf.float32, shape=in_shape)
         bon_tf = online_norm(inputs, alpha_fwd=alpha_fwd, alpha_bkw=alpha_bkw,
-                             axis=1, training=True, b_size=B_SIZE)
+                             axis=1, training=True,
+                             batch_acceleration=True, b_size=B_SIZE)
 
         with tf.Session() as sess:
             sess.run(tf.global_variables_initializer())
@@ -138,13 +139,15 @@ class OnlineNormTest(unittest.TestCase):
 
         b_inputs = tf.placeholder(tf.float32, shape=in_shape)
         bon_tf = online_norm(b_inputs, alpha_fwd=alpha_fwd, alpha_bkw=alpha_bkw,
-                             axis=1, training=True, b_size=B_SIZE)
+                             axis=1, training=True,
+                             batch_acceleration=True, b_size=B_SIZE)
 
         # Instantiate tf implementation of the online layer
         in_shape = input_data[0:1].shape
         inputs = tf.placeholder(tf.float32, shape=in_shape)
         on_tf = online_norm(inputs, alpha_fwd=alpha_fwd, alpha_bkw=alpha_bkw,
-                            axis=1, training=True)
+                            axis=1, training=True,
+                            batch_acceleration=False, b_size=1)
 
         with tf.Session() as sess:
             sess.run(tf.global_variables_initializer())
@@ -187,13 +190,15 @@ class OnlineNormTest(unittest.TestCase):
 
         b_inputs = tf.placeholder(tf.float32, shape=in_shape)
         bon_tf = online_norm(b_inputs, alpha_fwd=alpha_fwd, alpha_bkw=alpha_bkw,
-                             axis=1, training=True, b_size=B_SIZE, ecm='ls')
+                             axis=1, training=True,
+                             batch_acceleration=True, b_size=B_SIZE, ecm='ls')
 
         # Instantiate tf implementation of the online layer
         in_shape = input_data[0:1].shape
         inputs = tf.placeholder(tf.float32, shape=in_shape)
         on_tf = online_norm(inputs, alpha_fwd=alpha_fwd, alpha_bkw=alpha_bkw,
-                            axis=1, training=True, ecm='ls')
+                            axis=1, training=True,
+                             batch_acceleration=False, b_size=1, ecm='ls')
 
         with tf.Session() as sess:
             sess.run(tf.global_variables_initializer())
@@ -235,7 +240,8 @@ class OnlineNormTest(unittest.TestCase):
         b_inputs = tf.placeholder(tf.float32, shape=in_shape)
         b_deltas = tf.placeholder(tf.float32, shape=in_shape)
         bon_tf = online_norm(b_inputs, alpha_fwd=alpha_fwd, alpha_bkw=alpha_bkw,
-                             axis=1, training=True, b_size=B_SIZE, ecm='')
+                             axis=1, training=True,
+                             batch_acceleration=True, b_size=B_SIZE, ecm='')
         # set up on_tf's gradient functionality
         def grad_func(b_d_in, b_inputs):
             return tf.gradients(ys=bon_tf, xs=b_inputs, grad_ys=b_d_in)
@@ -247,7 +253,8 @@ class OnlineNormTest(unittest.TestCase):
         inputs = tf.placeholder(tf.float32, shape=in_shape)
         deltas = tf.placeholder(tf.float32, shape=in_shape)
         on_tf = online_norm(inputs, alpha_fwd=alpha_fwd, alpha_bkw=alpha_bkw,
-                            axis=1, training=True, ecm='')
+                            axis=1, training=True,
+                            batch_acceleration=False, b_size=1, ecm='')
         # set up on_tf's gradient functionality
         def grad_func(d_in, inputs):
             return tf.gradients(ys=on_tf, xs=inputs, grad_ys=d_in)
@@ -318,7 +325,8 @@ class OnlineNormTest(unittest.TestCase):
         b_inputs = tf.placeholder(tf.float32, shape=in_shape)
         b_deltas = tf.placeholder(tf.float32, shape=in_shape)
         bon_tf = online_norm(b_inputs, alpha_fwd=alpha_fwd, alpha_bkw=alpha_bkw,
-                             axis=-1, training=True, b_size=B_SIZE, ecm='')
+                             axis=-1, training=True,
+                             batch_acceleration=True, b_size=B_SIZE, ecm='')
         # set up on_tf's gradient functionality
         def grad_func(b_d_in, b_inputs):
             return tf.gradients(ys=bon_tf, xs=b_inputs, grad_ys=b_d_in)
@@ -330,7 +338,8 @@ class OnlineNormTest(unittest.TestCase):
         inputs = tf.placeholder(tf.float32, shape=in_shape)
         deltas = tf.placeholder(tf.float32, shape=in_shape)
         on_tf = online_norm(inputs, alpha_fwd=alpha_fwd, alpha_bkw=alpha_bkw,
-                            axis=-1, training=True, ecm='')
+                            axis=-1, training=True,
+                            batch_acceleration=False, b_size=1, ecm='')
         # set up on_tf's gradient functionality
         def grad_func(d_in, inputs):
             return tf.gradients(ys=on_tf, xs=inputs, grad_ys=d_in)
@@ -398,7 +407,8 @@ class OnlineNormTest(unittest.TestCase):
         b_inputs = tf.placeholder(tf.float32, shape=in_shape)
         b_deltas = tf.placeholder(tf.float32, shape=in_shape)
         bon_tf = online_norm(b_inputs, alpha_fwd=alpha_fwd, alpha_bkw=alpha_bkw,
-                             axis=-1, training=True, b_size=B_SIZE, ecm='')
+                             axis=-1, training=True,
+                             batch_acceleration=True, b_size=B_SIZE, ecm='')
         # set up on_tf's gradient functionality
         def grad_func(b_d_in, b_inputs):
             return tf.gradients(ys=bon_tf, xs=b_inputs, grad_ys=b_d_in)
@@ -410,7 +420,8 @@ class OnlineNormTest(unittest.TestCase):
         inputs = tf.placeholder(tf.float32, shape=in_shape)
         deltas = tf.placeholder(tf.float32, shape=in_shape)
         on_tf = online_norm(inputs, alpha_fwd=alpha_fwd, alpha_bkw=alpha_bkw,
-                            axis=-1, training=True, ecm='')
+                            axis=-1, training=True,
+                             batch_acceleration=False, b_size=1, ecm='')
         # set up on_tf's gradient functionality
         def grad_func(d_in, inputs):
             return tf.gradients(ys=on_tf, xs=inputs, grad_ys=d_in)
@@ -460,6 +471,255 @@ class OnlineNormTest(unittest.TestCase):
                 np.testing.assert_allclose(grad_in, bon_grad_idx,
                                            rtol=RTOL, atol=ATOL,
                                            err_msg=b_err_str)
+
+    def test070_bon_vs_on(self, alpha_fwd=ALPHA_FWD, alpha_bkw=ALPHA_BKW):
+        """
+        Test the Online Normalization Layer's fprop and bprop against the
+        numpy implementation of the layer.
+
+        NOTE:
+            - layer's mu and var are randomly initialized as well
+            A zero mean unit variance normalization transformation would do
+            nothing therefore the test would be uninformative
+        """
+        input_data, deltas_in = gen_data()  # generate the data
+
+        # Instantiate the tensorflow implementation of batched on layer
+        in_shape = input_data[0:B_SIZE].shape
+        b_inputs = tf.placeholder(tf.float32, shape=in_shape)
+        b_deltas = tf.placeholder(tf.float32, shape=in_shape)
+        bon_tf = online_norm(b_inputs, alpha_fwd=alpha_fwd, alpha_bkw=alpha_bkw,
+                             axis=1, training=True,
+                             batch_acceleration=True, b_size=B_SIZE, ecm='')
+        # set up on_tf's gradient functionality
+        def grad_func(b_d_in, b_inputs):
+            return tf.gradients(ys=bon_tf, xs=b_inputs, grad_ys=b_d_in)
+        bon_grad = grad_func(b_deltas, b_inputs)
+
+        grad_in = np.empty(in_shape)
+        # Instantiate tensorflow implementation of the online layer
+        in_shape = input_data[0:B_SIZE].shape
+        inputs = tf.placeholder(tf.float32, shape=in_shape)
+        deltas = tf.placeholder(tf.float32, shape=in_shape)
+        on_tf = online_norm(inputs, alpha_fwd=alpha_fwd, alpha_bkw=alpha_bkw,
+                            axis=1, training=True,
+                            batch_acceleration=False, b_size=B_SIZE, ecm='')
+        # set up on_tf's gradient functionality
+        def grad_func(d_in, inputs):
+            return tf.gradients(ys=on_tf, xs=inputs, grad_ys=d_in)
+        on_grad = grad_func(deltas, inputs)
+
+        with tf.Session() as sess:
+            sess.run(tf.global_variables_initializer())
+
+            # Iterate over generated data
+            for i in range(len(input_data)):
+                idx = i % B_SIZE
+                
+                # forward check
+                if idx == 0:
+                    # get the output of the tf version of the layer
+                    feed_dict = {b_inputs: input_data[i:i + B_SIZE]}
+                    bon_tf_out = sess.run([bon_tf], feed_dict=feed_dict)
+                    bon_tf_out = np.array(bon_tf_out[0])
+
+                    # get the output of the tf version of the layer
+                    on_tf_out = sess.run([on_tf],
+                                         feed_dict={inputs: input_data[i:i + B_SIZE]})
+                    out = np.array(on_tf_out[0])
+
+                    f_err_str = 'fwd output divergence on itr {}'.format(i)
+                    np.testing.assert_allclose(out, bon_tf_out,
+                                               rtol=RTOL, atol=ATOL,
+                                               err_msg=f_err_str)
+
+                # backward check
+                if idx == 0:
+                    # get the output of the tf version of the layer
+                    grad_dict = {b_deltas: deltas_in[i:i + B_SIZE],
+                                 b_inputs: input_data[i:i + B_SIZE]}
+
+                    bon_tf_grad_out = np.array(sess.run([bon_grad],
+                                               feed_dict=grad_dict)[0][0])
+
+                    # get the deltas of the tf single batch layer
+                    grad_dict = {deltas: deltas_in[i:i + B_SIZE],
+                                 inputs: input_data[i:i + B_SIZE]}
+                    grad_in = np.array(sess.run([on_grad],
+                                            feed_dict=grad_dict)[0][0])
+
+                    # compare deltas using the symmetric isclose
+                    b_err_str = 'bkw delta divergence on itr {}'.format(i)
+                    bon_grad_idx = bon_tf_grad_out
+                    np.testing.assert_allclose(grad_in, bon_grad_idx,
+                                               rtol=RTOL, atol=ATOL,
+                                               err_msg=b_err_str)
+
+    def test080_bon_vs_on_ch_last(self,
+                                  alpha_fwd=ALPHA_FWD, alpha_bkw=ALPHA_BKW):
+        """
+        Test the Online Normalization Layer's fprop and bprop against the
+        numpy implementation of the layer.
+
+        NOTE:
+            - layer's mu and var are randomly initialized as well
+            A zero mean unit variance normalization transformation would do
+            nothing therefore the test would be uninformative
+        """
+        # generate the data
+        input_data, deltas_in = gen_data(channel_last=True)
+
+        # Instantiate the tensorflow implementation of batched on layer
+        in_shape = input_data[0:B_SIZE].shape
+        b_inputs = tf.placeholder(tf.float32, shape=in_shape)
+        b_deltas = tf.placeholder(tf.float32, shape=in_shape)
+        bon_tf = online_norm(b_inputs, alpha_fwd=alpha_fwd, alpha_bkw=alpha_bkw,
+                             axis=-1, training=True,
+                             batch_acceleration=True, b_size=B_SIZE, ecm='')
+        # set up on_tf's gradient functionality
+        def grad_func(b_d_in, b_inputs):
+            return tf.gradients(ys=bon_tf, xs=b_inputs, grad_ys=b_d_in)
+        bon_grad = grad_func(b_deltas, b_inputs)
+
+        grad_in = np.empty(in_shape)
+        # Instantiate tensorflow implementation of the online layer
+        in_shape = input_data[0:B_SIZE].shape
+        inputs = tf.placeholder(tf.float32, shape=in_shape)
+        deltas = tf.placeholder(tf.float32, shape=in_shape)
+        on_tf = online_norm(inputs, alpha_fwd=alpha_fwd, alpha_bkw=alpha_bkw,
+                            axis=-1, training=True,
+                            batch_acceleration=False, b_size=B_SIZE, ecm='')
+        # set up on_tf's gradient functionality
+        def grad_func(d_in, inputs):
+            return tf.gradients(ys=on_tf, xs=inputs, grad_ys=d_in)
+        on_grad = grad_func(deltas, inputs)
+
+        with tf.Session() as sess:
+            sess.run(tf.global_variables_initializer())
+
+            # Iterate over generated data
+            for i in range(len(input_data)):
+                idx = i % B_SIZE
+                
+                # forward check
+                if idx == 0:
+                    # get the output of the tf version of the layer
+                    feed_dict = {b_inputs: input_data[i:i + B_SIZE]}
+                    bon_tf_out = sess.run([bon_tf], feed_dict=feed_dict)
+                    bon_tf_out = np.array(bon_tf_out[0])
+
+                    # get the output of the tf version of the layer
+                    on_tf_out = sess.run([on_tf],
+                                         feed_dict={inputs: input_data[i:i + B_SIZE]})
+                    out = np.array(on_tf_out[0])
+
+                    f_err_str = 'fwd output divergence on itr {}'.format(i)
+                    np.testing.assert_allclose(out, bon_tf_out,
+                                               rtol=RTOL, atol=ATOL,
+                                               err_msg=f_err_str)
+
+                # backward check
+                if idx == 0:
+                    # get the output of the tf version of the layer
+                    grad_dict = {b_deltas: deltas_in[i:i + B_SIZE],
+                                 b_inputs: input_data[i:i + B_SIZE]}
+
+                    bon_tf_grad_out = np.array(sess.run([bon_grad],
+                                               feed_dict=grad_dict)[0][0])
+
+                    # get the deltas of the tf single batch layer
+                    grad_dict = {deltas: deltas_in[i:i + B_SIZE],
+                                 inputs: input_data[i:i + B_SIZE]}
+                    grad_in = np.array(sess.run([on_grad],
+                                            feed_dict=grad_dict)[0][0])
+
+                    b_err_str = 'bkw delta divergence on itr {}'.format(i)
+                    bon_grad_idx = bon_tf_grad_out
+                    np.testing.assert_allclose(grad_in, bon_grad_idx,
+                                               rtol=RTOL, atol=ATOL,
+                                               err_msg=b_err_str)
+
+    def test09_bon_vs_on_Dense(self, alpha_fwd=ALPHA_FWD, alpha_bkw=ALPHA_BKW):
+        """
+        Test the Online Normalization Layer's fprop and bprop
+
+        NOTE:
+            - layer's mu and var are randomly initialized as well
+            A zero mean unit variance normalization transformation would do
+            nothing therefore the test would be uninformative
+        """
+        # generate the data
+        input_data, deltas_in = gen_data(fc_output=True)
+
+        # Instantiate the tensorflow implementation of batched on layer
+        in_shape = input_data[0:B_SIZE].shape
+        b_inputs = tf.placeholder(tf.float32, shape=in_shape)
+        b_deltas = tf.placeholder(tf.float32, shape=in_shape)
+        bon_tf = online_norm(b_inputs, alpha_fwd=alpha_fwd, alpha_bkw=alpha_bkw,
+                             axis=-1, training=True,
+                             batch_acceleration=True, b_size=B_SIZE, ecm='')
+        # set up on_tf's gradient functionality
+        def grad_func(b_d_in, b_inputs):
+            return tf.gradients(ys=bon_tf, xs=b_inputs, grad_ys=b_d_in)
+        bon_grad = grad_func(b_deltas, b_inputs)
+
+        grad_in = np.empty(in_shape)
+        # Instantiate tensorflow implementation of the online layer
+        in_shape = input_data[0:B_SIZE].shape
+        inputs = tf.placeholder(tf.float32, shape=in_shape)
+        deltas = tf.placeholder(tf.float32, shape=in_shape)
+        on_tf = online_norm(inputs, alpha_fwd=alpha_fwd, alpha_bkw=alpha_bkw,
+                            axis=-1, training=True,
+                             batch_acceleration=False, b_size=B_SIZE, ecm='')
+        # set up on_tf's gradient functionality
+        def grad_func(d_in, inputs):
+            return tf.gradients(ys=on_tf, xs=inputs, grad_ys=d_in)
+        on_grad = grad_func(deltas, inputs)
+
+        with tf.Session() as sess:
+            sess.run(tf.global_variables_initializer())
+
+            # Iterate over generated data
+            for i in range(len(input_data)):
+                idx = i % B_SIZE
+                
+                # forward check
+                if idx == 0:
+                    # get the output of the tf version of the layer
+                    feed_dict = {b_inputs: input_data[i:i + B_SIZE]}
+                    bon_tf_out = sess.run([bon_tf], feed_dict=feed_dict)
+                    bon_tf_out = np.array(bon_tf_out[0])
+
+                    # get the output of the tf version of the layer
+                    on_tf_out = sess.run([on_tf],
+                                         feed_dict={inputs: input_data[i:i + B_SIZE]})
+                    out = np.array(on_tf_out[0])
+
+                    f_err_str = 'fwd output divergence on itr {}'.format(i)
+                    np.testing.assert_allclose(out, bon_tf_out,
+                                               rtol=RTOL, atol=ATOL,
+                                               err_msg=f_err_str)
+
+                # backward check
+                if idx == 0:
+                    # get the output of the tf version of the layer
+                    grad_dict = {b_deltas: deltas_in[i:i + B_SIZE],
+                                 b_inputs: input_data[i:i + B_SIZE]}
+
+                    bon_tf_grad_out = np.array(sess.run([bon_grad],
+                                               feed_dict=grad_dict)[0][0])
+
+                    # get the deltas of the tf single batch layer
+                    grad_dict = {deltas: deltas_in[i:i + B_SIZE],
+                                 inputs: input_data[i:i + B_SIZE]}
+                    grad_in = np.array(sess.run([on_grad],
+                                            feed_dict=grad_dict)[0][0])
+
+                    b_err_str = 'bkw delta divergence on itr {}'.format(i)
+                    bon_grad_idx = bon_tf_grad_out
+                    np.testing.assert_allclose(grad_in, bon_grad_idx,
+                                               rtol=RTOL, atol=ATOL,
+                                               err_msg=b_err_str)
 
 if __name__ == '__main__':
     unittest.main()
