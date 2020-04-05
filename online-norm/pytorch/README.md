@@ -59,7 +59,7 @@ python -m tests.test_online_norm_2d
 
 #### Added
 
-- Added [activation clamping](LinkToActClampPaper) as an error checking mechanism (ecm) and make it the default ecm.
+- Added [activation clamping](https://www.cerebras.net/error-compensation-mechanism-in-online-normalization/) as an error compensation mechanism (ecm) and make it the default ecm.
 
 ### 2020-04-01
 

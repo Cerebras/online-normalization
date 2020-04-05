@@ -358,7 +358,7 @@ class OnlineNorm2d:
             Default: 1e-5
         affine: a boolean value that when set to ``True``, this module has
             learnable affine parameters (weight & bias). Default: ``True``
-        ecm: a string which defines the error checking mechanism in OnlineNorm.
+        ecm: a string which defines the error compensation mechanism in OnlineNorm.
             Choice: `ac` (Activation Clamping) | `ls` (Layer Scaling).
         ls_eps: if ecm is `ls`, this is the `ls` eps.
         clamp_val: if ecm is `ac` this is the clamp value.
