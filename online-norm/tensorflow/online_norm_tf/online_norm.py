@@ -884,12 +884,14 @@ class NormBatched(Layer):
             # expect 0 << alpha ~<1 so we can move it to log space
             if self.mixed_precision:
                 delta = tf.cast(delta_out, self.fp_type)
+                fp_out = tf.cast(out, self.fp_type)
             else:
                 delta = delta_out
-            alpha = 1 - (1. - abkw) * tf.reduce_mean(out * out, axis=norm_ax)
+                fp_out = out
+            alpha = 1 - (1. - abkw) * tf.reduce_mean(fp_out * fp_out, axis=norm_ax)
             alpha = tf.clip_by_value(alpha, clip_min, 1e32)
 
-            beta = tf.reduce_mean(delta * out, axis=norm_ax)
+            beta = tf.reduce_mean(delta * fp_out, axis=norm_ax)
 
             alpha2log = tf.log(tf.concat([alpha_p, alpha], 0))
 
@@ -933,9 +935,9 @@ class NormBatched(Layer):
             if self.mixed_precision:
                 return (
                     (
-                        delta_out - (1. - abkw) *
+                        delta_out -
                         reshape(tf.cast(vp, self.mp_type), norm_ax=norm_ax) *
-                        tf.cast(out, self.mp_type)
+                        out * (1. - abkw)
                     ),
                     v_new,
                     alpha,
@@ -945,8 +947,8 @@ class NormBatched(Layer):
             else:
                 return (
                     (
-                        delta_out - (1. - abkw) *
-                        reshape(vp, norm_ax=norm_ax) * out
+                        delta_out -
+                        reshape(vp, norm_ax=norm_ax) * out * (1. - abkw)
                     ),
                     v_new,
                     alpha,
