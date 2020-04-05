@@ -836,7 +836,7 @@ class NormBatched(Layer):
 
         def lin_v_crtl(delta_out, out, v_p, alpha_p, beta_p,
                        b_size=self.b_size, num_features=self.ch,
-                       abkw=self.abkw, norm_ax=self.norm_ax, clip_min=1e-32):
+                       abkw=self.abkw, norm_ax=self.norm_ax, clip_min=1e-37):
             """
             Helper function to linearize the v controller
 
