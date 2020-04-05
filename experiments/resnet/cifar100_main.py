@@ -81,7 +81,7 @@ parser.add_argument('--abkw', '--decay-factor-backward', default=15 / 16,
 ecm_choices=['ls', 'ac', 'none']
 parser.add_argument('--ecm', default='ls', type=str,
                     metavar='ECM', choices=ecm_choices,
-                    help='Online Norm ErrorCheckingMechanism choices: ' +
+                    help='Online Norm ErrorCompensationMechanism choices: ' +
                         ' | '.join(ecm_choices) +
                         ' (default: ls)')
 parser.add_argument('--gn-num-groups', default=8, type=int,

@@ -92,7 +92,7 @@ optional arguments:
                         backward decay factor which sets control process
                         hyperparameter when using online normalization
                         (default: 1 / 2)
-  --ecm ECM             Online Norm ErrorCheckingMechanism choices: ls | ac |
+  --ecm ECM             Online Norm ErrorCompensationMechanism choices: ls | ac |
                         none (default: ls)
   --classes N           classes (default: 6)
   --t-size N            train set size (default: 2000)

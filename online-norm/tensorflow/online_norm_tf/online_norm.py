@@ -1149,7 +1149,7 @@ class OnlineNorm(Layer):
         gamma_regularizer: Optional regularizer for the gamma weight.
         beta_constraint: Optional constraint for the beta weight.
         gamma_constraint: Optional constraint for the gamma weight.
-        ecm: a string which defines the error checking mechanism in OnlineNorm.
+        ecm: a string which defines the error compensation mechanism in OnlineNorm.
             Choice: `ac` (Activation Clamping) | `ls` (Layer Scaling).
         ls_eps: if ecm is `ls`, this is the `ls` eps.
         clamp_val: if ecm is `ac` this is the clamp value.
@@ -1396,7 +1396,7 @@ class OnlineNorm(Layer):
             else:
                 outputs += _bcast(self.beta)
 
-        # apply error checking machanism
+        # apply error compensation mechanism
         if self.ecm:
             outputs = self.ecm(outputs)
 

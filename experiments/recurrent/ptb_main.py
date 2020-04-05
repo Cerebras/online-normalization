@@ -86,7 +86,7 @@ parser.add_argument('--abkw', '--decay-factor-backward', default=31 / 32,
 ecm_choices=['ls', 'ac', 'none']
 parser.add_argument('--ecm', default='ls', type=str,
                     metavar='ECM', choices=ecm_choices,
-                    help='Online Norm ErrorCheckingMechanism choices: ' +
+                    help='Online Norm ErrorCompensationMechanism choices: ' +
                         ' | '.join(ecm_choices) +
                         ' (default: ls)')
 parser.add_argument('--cell-norm', action='store_true',

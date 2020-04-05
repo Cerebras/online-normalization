@@ -79,7 +79,7 @@ optional arguments:
                         backward decay factor which sets control process
                         hyperparameter when using online normalization
                         (default: 0.99)
-  --ecm ECM             Online Norm ErrorCheckingMechanism choices: ls | ac |
+  --ecm ECM             Online Norm ErrorCompensationMechanism choices: ls | ac |
                         none (default: ls)
 ```
 
