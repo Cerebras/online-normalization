@@ -13,13 +13,13 @@ with Online Normalization.
 ## Installation
 
 ```bash
-cd ./online-norm/online-norm-pytorch
+cd ./online-norm/pytorch
 python -m pip install -e .
 ```
 
 ## Usage
 
-see `./online-norm/online-norm-pytorch`
+see `./online-norm/pytorch`
 
 # TensorFlow Usage
 
@@ -27,13 +27,13 @@ see `./online-norm/online-norm-pytorch`
 ## Installation
 
 ```bash
-cd ./online-norm/online-norm-tf
+cd ./online-norm/tensorflow
 python -m pip install -e .
 ```
 
 ## Usage
 
-see `./online-norm/online-norm-tf`
+see `./online-norm/tensorflow`
 
 ## Contact
 
