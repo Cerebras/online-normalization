@@ -73,8 +73,6 @@ out = sess.run([norm], feed_dict={input_placeholder: inputs})
 
 ## Testing installation
 
-The test uses [Nose](https://nose.readthedocs.io/en/latest/) testing framework.
-To test after installation:
 ```bash
 python setup.py test
 ```
@@ -90,3 +88,10 @@ python setup.py test
 #### Changed
 
 - Combine BatchedOnlineNorm and OnlineNorm into one class since its one algorithm.
+
+### 2020-04-05
+
+#### Added
+
+- Loop version of OnlineNorm implemented
+- Tests updated
