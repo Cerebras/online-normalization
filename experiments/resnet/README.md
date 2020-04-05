@@ -113,7 +113,7 @@ optional arguments:
                         backward decay factor which sets control process
                         hyperparameter when using online normalization
                         (default: 0.99)
-  --ecm ECM             Online Norm ErrorCheckingMechanism choices: ls | ac |
+  --ecm ECM             Online Norm ErrorCompensationMechanism choices: ls | ac |
                         none (default: ls)
   --gn-num-groups GN_NUM_GROUPS
                         number of groups in group norm if using group norm as
@@ -170,7 +170,7 @@ optional arguments:
                         backward decay factor which sets control process
                         hyperparameter when using online normalization
                         (default: 127 / 128)
-  --ecm ECM             Online Norm ErrorCheckingMechanism choices: ls | ac |
+  --ecm ECM             Online Norm ErrorCompensationMechanism choices: ls | ac |
                         none (default: ls)
   --gn-num-groups GN_NUM_GROUPS
                         number of groups in group norm if using group norm as
@@ -227,7 +227,7 @@ optional arguments:
                         backward decay factor which sets control process
                         hyperparameter when using online normalization
                         (default: 15 / 16)
-  --ecm ECM             Online Norm ErrorCheckingMechanism choices: ls | ac |
+  --ecm ECM             Online Norm ErrorCompensationMechanism choices: ls | ac |
                         none (default: ls)
   --gn-num-groups GN_NUM_GROUPS
                         number of groups in group norm if using group norm as

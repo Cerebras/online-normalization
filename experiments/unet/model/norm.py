@@ -52,7 +52,7 @@ def norm(num_features, mode='batch', eps=1e-05, momentum=0.1, affine=True,
             Default: 0.999
         alpha_bkw: the decay factor to be used in fprop to control the gradients
             propagating through the network. Default: 0.99
-        ecm: a string which defines the error checking mechanism in OnlineNorm.
+        ecm: a string which defines the error compensation mechanism in OnlineNorm.
             Choice: `ac` (Activation Clamping) | `ls` (Layer Scaling).
             Default: ls
         ls_eps: if ecm is `ls`, this is the `ls` eps. Default: 1e-05
