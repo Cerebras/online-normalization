@@ -78,10 +78,6 @@ To test after installation:
 ```bash
 python setup.py test
 ```
-or
-```bash
-nosetests
-```
 
 ## change log
 
