@@ -1246,6 +1246,7 @@ class OnlineNorm(Layer):
         self.axis = axis
 
         assert isinstance(b_size, int), 'batch size (b_size) is a required integer parameter'
+        batch_acceleration = False if b_size == 1 else batch_acceleration
         norm_func = NormBatched if batch_acceleration else Norm
         
         self.normalization = norm_func(
