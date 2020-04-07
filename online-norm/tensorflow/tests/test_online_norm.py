@@ -19,7 +19,6 @@ from numpy_on import OnlineNorm2d as NpOnlineNorm2d
 
 from tensorflow.keras.mixed_precision.experimental import Policy
 
-
 tf.logging.set_verbosity(tf.logging.ERROR)
 
 
