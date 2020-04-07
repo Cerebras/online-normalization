@@ -567,7 +567,7 @@ class NormBatched(Layer):
                 [1.],
                 shape=[self.b_size, self.ch]
             ),
-            self.mp_type
+            self.fp_type
         )
         self.afpow = tf.cast(
             tf.reshape(
@@ -577,7 +577,7 @@ class NormBatched(Layer):
                 ),
                 (self.b_size, 1, 1)
             ),
-            self.mp_type
+            self.fp_type
         )
 
         # batch streaming parameters fpass
@@ -586,7 +586,7 @@ class NormBatched(Layer):
                 [1.],
                 shape=[self.b_size, self.ch]
             ),
-            self.mp_type
+            self.fp_type
         )
         self.abpow = tf.cast(
             tf.reshape(
@@ -596,7 +596,7 @@ class NormBatched(Layer):
                 ),
                 (self.b_size, 1, 1)
             ),
-            self.mp_type
+            self.fp_type
         )
 
         # streaming normalization statistics
@@ -740,10 +740,8 @@ class NormBatched(Layer):
             Helper function for streaming across the batch dimension for a
             momentum system using linear operations.
             Useful for GPU acceleration of streaming control layer.
-
             Used in mu, var, and u_ctrl updates
             Note: v_ctrl needs separate controller
-
             Arguments
                 stat_prev: previous time steps statistics
                 stat_curr: this time steps statistics
@@ -751,13 +749,11 @@ class NormBatched(Layer):
                 momentum: the momentum of the system
                 momentum_pow: momentum ** range(b_size - 1, -1, -1)
                 momentum_batch: momentum ** b_size
-
             Returns:
                 stream_t1: 1 time step stale estimates of statistics
                            one for each example in batch
                 stream_curr: estimates of statistics
                              one for each example in batch
-
             """
 
             tmp = tf.concat([stat_prev, stat_curr], axis=0)[1:]
@@ -785,7 +781,6 @@ class NormBatched(Layer):
 
             Returns
                 d: deltas convolved along the 2b dimension with a 1 filter
-
             """
             c_input = tf.transpose(tf.reshape(tf.transpose(input,
                                                            perm=[1, 0, 2]),
@@ -844,7 +839,6 @@ class NormBatched(Layer):
                 v_new: v control current
                 alpha: alpha of this time step to be cached
                 beta: beta of this time step to be cached
-
             """
             # expect 0 << alpha ~<1 so we can move it to log space
             delta = tf.cast(delta_out, self.fp_type)
@@ -940,18 +934,18 @@ class NormBatched(Layer):
                     axis=tuple(self.norm_ax),
                     keepdims=False
                 )
-                dmean = tf.cast(dmean,self.mp_type)
-                _u_ctrl, u_ctrl = momentum_stat(tf.cast(self.u_ctrl_p,self.mp_type), dmean,
-                                                tf.cast(self.u_ctrl,self.mp_type), abkw,
+                
+                _u_ctrl, u_ctrl = momentum_stat(self.u_ctrl_p, dmean,
+                                                self.u_ctrl, abkw,
                                                 self.abpow, self.abbatch)
 
                 with tf.control_dependencies([_u_ctrl, u_ctrl]):
-                    u_update = self.u_ctrl.assign(tf.cast(u_ctrl,self.fp_type))
-                    u_p_update = self.u_ctrl_p.assign(tf.cast(dmean,self.fp_type))
+                    u_update = self.u_ctrl.assign(u_ctrl)
+                    u_p_update = self.u_ctrl_p.assign(dmean)
 
-                    v_p_update = self.v_p.assign(tf.cast(v_p,self.fp_type))
-                    alpha_p_update = self.alpha_p.assign(tf.cast(alpha_p,self.fp_type))
-                    beta_p_update = self.beta_p.assign(tf.cast(beta_p,self.fp_type))
+                    v_p_update = self.v_p.assign(v_p)
+                    alpha_p_update = self.alpha_p.assign(alpha_p)
+                    beta_p_update = self.beta_p.assign(beta_p)
 
                     grad_delta = (
                         delta_temp_scaled -
@@ -983,18 +977,18 @@ class NormBatched(Layer):
             # compute batch statistics
             mu, var = tf.nn.moments(tf.cast(inputs, self.fp_type),
                                           self.norm_ax, keep_dims=False)
-            mu = tf.cast(mu, self.mp_type)
-            var = tf.cast(var, self.mp_type)
 
             # get instance statistics
-            _mu_b, mu_b = momentum_stat(tf.cast(self.mu_p,self.mp_type), mu, tf.cast(self.mu,self.mp_type),
+            _mu_b, mu_b = momentum_stat(self.mu_p, mu, self.mu,
                                         afwd, self.afpow, self.afbatch)
 
             var_current = var + afwd * (mu - _mu_b) ** 2
-            s, var_b = momentum_stat(tf.cast(self.var_p,self.mp_type), var_current, tf.cast(self.var,self.mp_type),
+            s, var_b = momentum_stat(self.var_p, var_current, self.var,
                                      afwd, self.afpow, self.afbatch)
 
-            scale = self.s.assign(tf.sqrt(s + self.epsilon))
+            s = tf.cast(s,self.mp_type)
+            _mu_b = tf.cast(_mu_b,self.mp_type)
+            scale = self.s.assign(tf.cast(tf.sqrt(s + self.epsilon),self.mp_type))
 
             with tf.control_dependencies([scale]):
                 # perform normalization with previous time steps statistics
@@ -1008,11 +1002,11 @@ class NormBatched(Layer):
             out_assign = self.outputs.assign(out)
 
             with tf.control_dependencies([out_assign]):
-                update_mu = self.mu.assign(tf.cast(mu_b,self.fp_type))
-                update_var = self.var.assign(tf.cast(var_b,self.fp_type))
+                update_mu = self.mu.assign(mu_b)
+                update_var = self.var.assign(var_b)
 
-                update_mu_p = self.mu_p.assign(tf.cast(mu,self.fp_type))
-                update_var_p = self.var_p.assign(tf.cast(var_current,self.fp_type))
+                update_mu_p = self.mu_p.assign(mu)
+                update_var_p = self.var_p.assign(var_current)
 
             with tf.control_dependencies([update_mu, update_var,
                                           update_mu_p, update_var_p]):
