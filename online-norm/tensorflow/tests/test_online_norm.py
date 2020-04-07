@@ -627,33 +627,5 @@ class TestOnlineNorm(unittest.TestCase):
             itrs=itrs,
         )
 
-
-    def test062_2d_numerical_comparison_onbatched_vs_on_channel_last(
-        self,
-        batch_size=8,
-        num_features=16,
-        height=45,
-        width=64,
-        alpha_fwd=0.99,
-        alpha_bkw=0.99,
-        itrs=2,
-    ):
-        """
-        Test ON Batched Layer against ON for 2d inputs in channel last mode
-        """
-        # create inputs
-        np_inputs = np.random.randn(batch_size, height, width, num_features) + .25
-        # instantiate gradient at the output
-        np_grad_out = np.random.randn(batch_size, height, width, num_features) + .125
-
-        self.template_numerical_comparison_onbatched_vs_on(
-            np_inputs,
-            np_grad_out=np_grad_out,
-            axis=-1,
-            alpha_fwd=alpha_fwd,
-            alpha_bkw=alpha_bkw,
-            itrs=itrs,
-        )
-
 if __name__ == '__main__':
     unittest.main()
