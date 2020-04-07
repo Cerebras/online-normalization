@@ -787,7 +787,7 @@ class NormBatched(Layer):
                                               [2 * b, -1]))
             out = tf.nn.conv1d(
                 tf.expand_dims(c_input, 2),
-                tf.constant([1.], dtype=self.mp_type, shape=[b, 1, 1]),
+                tf.constant([1.], dtype=self.fp_type, shape=[b, 1, 1]),
                 stride=1,
                 padding='VALID',
                 data_format="NWC"
@@ -872,7 +872,7 @@ class NormBatched(Layer):
 
             # conv along batch dim
             # in log same as prod over the same indexes
-            Aconvlog = tf.cast(conv_alongb_w1(tf.cast(Acirlog2,self.mp_type), b_size, num_features),self.fp_type)
+            Aconvlog = conv_alongb_w1(Acirlog2, b_size, num_features)
 
             CD = tf.exp(Aconvlog)
             Bcir = tf.reshape(
