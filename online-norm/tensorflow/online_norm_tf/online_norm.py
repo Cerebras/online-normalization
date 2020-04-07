@@ -239,7 +239,8 @@ class Norm(Layer):
             Returns
                 grad_delta: output deltas for inputs
             """
-
+            # deltas_shape = deltas.shape
+            # deltas = tf.reshape(deltas, [deltas_shape[0], deltas_shape[1], -1])
             def bwd_fn(elem):
                 alpha_bkw = self.alpha_bkw
                 delta, i = elem
@@ -348,11 +349,13 @@ class Norm(Layer):
                 )
             mean = tf.expand_dims(mean, -1)
             mean = tf.broadcast_to(mean, inputs.shape)
+            scale = tf.assign(self.s, scale)
             scale = tf.expand_dims(scale, -1)
             scale = tf.broadcast_to(scale, inputs.shape)
             outputs = ((inputs - mean) / scale)
             outputs = tf.reshape(outputs, input_shape)
-            with tf.control_dependencies([outputs, update_mu, update_var]):
+            output_assign = tf.assign(self.outputs, outputs, validate_shape=True)
+            with tf.control_dependencies([scale, output_assign, update_mu, update_var]):
                 netoutputs = tf.identity(outputs)
             return netoutputs, backward
 
