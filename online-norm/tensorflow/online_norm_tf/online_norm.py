@@ -723,6 +723,7 @@ class NormBatched(Layer):
         speed up computation with batched training we linearize the computation
         along the batch dimension and use convolutions in place of loops to
         distribute the computation across compute fabric.
+
         forward is decorated with @tf.custom_gradient and has its backward pass
         defined in backward.
 
@@ -756,6 +757,7 @@ class NormBatched(Layer):
                            one for each example in batch
                 stream_curr: estimates of statistics
                              one for each example in batch
+
             """
 
             tmp = tf.concat([stat_prev, stat_curr], axis=0)[1:]
@@ -842,6 +844,7 @@ class NormBatched(Layer):
                 v_new: v control current
                 alpha: alpha of this time step to be cached
                 beta: beta of this time step to be cached
+
             """
             # expect 0 << alpha ~<1 so we can move it to log space
             delta = tf.cast(delta_out, self.fp_type)
