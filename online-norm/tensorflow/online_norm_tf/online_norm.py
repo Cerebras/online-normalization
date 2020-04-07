@@ -20,11 +20,11 @@ class Norm(Layer):
     """
     Custom backprop normalizer implementation of the 
     [Online Normalization Algorithm](https://arxiv.org/abs/1905.05894) 
-    
+
     Note:
         Implemented with custom gradients, using the @tf.custom_gradient
         decorator which requires tf.__version__ >= 1.7
-    
+
     Arguments:
         alpha_fwd: the decay factor to be used in fprop to update statistics.
             Default: 0.999
@@ -44,15 +44,15 @@ class Norm(Layer):
         trainable: Boolean, if `True` also add variables to the graph
             collection `GraphKeys.TRAINABLE_VARIABLES`
             (see tf.Variable).  (Default: True)
-    
+
     Input shape:
       Arbitrary. Use the keyword argument `input_shape` (tuple of integers,
                  does not include the samples axis) when using this layer as
                  the first layer in a model.
-    
+
     Output shape:
         Same shape as input.
-    
+
     References:
         - [Online Normalization for Training Neural Networks](https://arxiv.org/abs/1905.05894)
     """
@@ -196,7 +196,7 @@ class Norm(Layer):
         Normalization algorithm) as described in the paper:
         `Online Normalization for Training Neural Networks`.
         This class implements a version of the mathematics below.
-        
+ 
         .. math::
             y_t = \frac{x_t - \mu_{t-1}}{\sqrt{\sigma^2_{t-1} + \epsilon}}
             \sigma^2_t = (
@@ -204,15 +204,15 @@ class Norm(Layer):
                 \alpha * (1 - \alpha) * (x_t - \mu_{t-1}) ^ 2
             )
             \mu_t = \alpha * \mu_{t-1} + (1 - \alpha) * x_t
-        
+
         The mean and standard-deviation are estimated per-feature.
-        
+
         forward is decorated with @tf.custom_gradient and has its backward pass
         defined in backward.
-        
+
         Arguments
             inputs: input activations
-        
+
         Returns:
             netout: list: [forward normalized activations,
                            backward function]
@@ -221,10 +221,10 @@ class Norm(Layer):
             """
             Wrapper for the custom backwards pass using ctrl process
             Note: deltas depends on fprop output
-            
+
             Arguments:
                 deltas: input deltas from the current batch
-            
+
             Returns
                 grad_delta: output deltas for inputs
             """
@@ -300,10 +300,10 @@ class Norm(Layer):
         def forward(inputs):
             """
             Function for forward pass.
-            
+
             Arguments:
                 inputs: activations of the current batch
-            
+
             Returns:
                 netout: normalized activations
                 backward_wrapper: function handle for custom backward pass
@@ -366,11 +366,11 @@ class Norm(Layer):
     def call(self, inputs, training=None):
         """
         Call function will be called by __call__
-        
+
         Arguments:
             inputs: activations into the layer
             training: Boolean to set training or inference mode
-        
+
         Returns:
             normalized activations with multiplicative scale and additive bias
             corrections
@@ -432,11 +432,11 @@ class NormBatched(Layer):
     Custom backprop normalizer implementation of the
     [Online Normalization Algorithm](https://arxiv.org/abs/1905.05894)
     with acceleration for batch processing.
-    
+
     Note:
         Implemented with custom gradients, using the @tf.custom_gradient
         decorator which requires tf.__version__ >= 1.7
-    
+
     Arguments:
         alpha_fwd: the decay factor to be used in fprop to update statistics.
             Default: 0.999
@@ -456,15 +456,15 @@ class NormBatched(Layer):
         trainable: Boolean, if `True` also add variables to the graph
             collection `GraphKeys.TRAINABLE_VARIABLES`
             (see tf.Variable).  (Default: True)
-    
+
     Input shape:
       Arbitrary. Use the keyword argument `input_shape` (tuple of integers,
                  does not include the samples axis) when using this layer as
                  the first layer in a model.
-    
+
     Output shape:
         Same shape as input.
-    
+
     References:
         - [Online Normalization for Training Neural Networks](https://arxiv.org/abs/1905.05894)
     """
@@ -710,19 +710,24 @@ class NormBatched(Layer):
         Normalization algorithm) as described in the paper:
         `Online Normalization for Training Neural Networks`.
         This class implements a version of the mathematics below.
+
         .. math::
             y_t = \frac{x_t - \mu_{t-1}}{\sqrt{\sigma^2_{t-1} + \epsilon}}
             \sigma^2_t = \alpha * \sigma^2_{t-1} + \alpha * (1 - \alpha) * (x_t - \mu_{t-1}) ^ 2
             \mu_t = \alpha * \mu_{t-1} + (1 - \alpha) * x_t
+
         The mean and standard-deviation are estimated per-feature.
+
         The math above represents the calculations occurring in the layer. To
         speed up computation with batched training we linearize the computation
         along the batch dimension and use convolutions in place of loops to
         distribute the computation across compute fabric.
         forward is decorated with @tf.custom_gradient and has its backward pass
         defined in backward.
+
         Arguments
             inputs: input activations
+
         Returns:
             netout: list: [forward normalized activations,
                            backward function]
@@ -806,14 +811,14 @@ class NormBatched(Layer):
                        abkw=self.abkw, norm_ax=self.norm_ax, clip_min=1e-37):
             """
             Helper function to linearize the v controller
-            
+
             Note:
                 - This is originally created / hard-coded for channel_first
                 operation
                 - There are edge cases where the math breaks down
                 i.e. we take a log of alpha, therefore we must clip alpha such
                 that alpha > 0. alpha = 1 - (1 - abkw) * (out ** 2)
-            
+
             Arguments:
                 deltas: input deltas to the v controller
                 out: the output of the forward pass
@@ -824,7 +829,7 @@ class NormBatched(Layer):
                 num_features: number of features
                 abkw: decay factor for the controller
                 clip_min: the epsilon by which to clip alpha
-            
+
             Returns
                 grad_delta: output deltas for inputs
                 v_new: v control current
@@ -895,10 +900,10 @@ class NormBatched(Layer):
             """
             Wrapper for the custom backwards pass using ctrl process
             Note: deltas depends on fprop output
-            
+
             Arguments:
                 deltas: input deltas from the current batch
-            
+
             Returns
                 grad_delta: output deltas for inputs
             """
@@ -955,10 +960,10 @@ class NormBatched(Layer):
         def forward(inputs):
             """
             Function for forward pass.
-            
+
             Arguments:
                 inputs: activations of the current batch
-            
+
             Returns:
                 netout: normalized activations
                 backward_wrapper: function handle for custom backward pass
@@ -1009,11 +1014,11 @@ class NormBatched(Layer):
     def call(self, inputs, training=None):
         """
         Call function will be called by __call__
-        
+
         Arguments:
             inputs: activations into the layer
             training: Boolean to set training or inference mode
-        
+
         Returns:
             normalized activations with multiplicative scale and additive bias
             corrections
@@ -1073,7 +1078,7 @@ class OnlineNormLayer(Layer):
     """
     Implementation of the 
     [Online Normalization Layer](https://arxiv.org/abs/1905.05894) 
-    
+
     Arguments:
         alpha_fwd: the decay factor to be used in fprop to update statistics.
             Default: 0.999
@@ -1110,15 +1115,15 @@ class OnlineNormLayer(Layer):
         trainable: Boolean, if `True` also add variables to the graph
             collection `GraphKeys.TRAINABLE_VARIABLES`
             (see tf.Variable).  (Default: True)
-    
+
     Input shape:
       Arbitrary. Use the keyword argument `input_shape` (tuple of integers,
                  does not include the samples axis) when using this layer as
                  the first layer in a model.
-    
+
     Output shape:
         Same shape as input.
-    
+
     References:
         - [Online Normalization for Training Neural Networks](https://arxiv.org/abs/1905.05894)
     """
@@ -1269,10 +1274,10 @@ class OnlineNormLayer(Layer):
     def layer_scaling(self, inputs):
         """
         Scale full layer by 2nd moment
-        
+
         Arguments:
             inputs: input activations
-        
+
         Returns
             activations scaled by their second moment
         """
@@ -1302,11 +1307,11 @@ class OnlineNormLayer(Layer):
     def call(self, inputs, training=None):
         """
         Call function will be called by __call__
-        
+
         Arguments:
             inputs: activations into the layer
             training: Boolean to set training or inference mode
-        
+
         Returns:
             normalized activations with multiplicative scale and additive bias
             corrections
@@ -1376,7 +1381,7 @@ def online_norm(
 ):
     """
     Functional interface to the Online Normalization Layer defined above
-    
+
     Arguments:
         inputs: The inputs to the layer.
         training: a boolean value that when set to `True`, the
@@ -1411,7 +1416,7 @@ def online_norm(
             collection `GraphKeys.TRAINABLE_VARIABLES`
             (see tf.Variable). (Default: True)
         b_size: batch size which is being trained. (Default: 1)
-    
+
     Return:
         Normalization Layer output
     """
