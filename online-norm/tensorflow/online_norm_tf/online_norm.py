@@ -236,8 +236,6 @@ class Norm(Layer):
                 alpha_bkw = self.alpha_bkw
                 delta, i = elem
 
-                delta_temp = delta
-
                 # control with v
                 delta_temp = (
                     delta -
@@ -868,7 +866,7 @@ class NormBatched(Layer):
                 tf.tile(alpha2log, [2 * b_size + 1, 1]),
                 [2 * b_size, 2 * b_size + 1, num_features]
             )[1:b_size + 1, :b_size]
-            # concatenate wit zeros for conv op
+            # concatenate with zeros for conv op
             Acirlog2 = tf.concat(
                 [
                     Acirlog,
