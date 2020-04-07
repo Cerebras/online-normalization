@@ -1074,7 +1074,7 @@ class NormBatched(Layer):
         return outputs
 
 
-class OnlineNormLayer(Layer):
+class OnlineNorm(Layer):
     """
     Implementation of the 
     [Online Normalization Layer](https://arxiv.org/abs/1905.05894) 
@@ -1138,7 +1138,7 @@ class OnlineNormLayer(Layer):
                  beta_constraint=None, gamma_constraint=None,
                  ecm='ac', ls_eps=1e-05, clamp_val=5, batch_acceleration=True,
                  b_size=None, trainable=True, name=None, **kwargs):
-        super(OnlineNormLayer, self).__init__(trainable=trainable,
+        super(OnlineNorm, self).__init__(trainable=trainable,
                                          name=name, **kwargs)
         # setup mixed precesion
         self.dtype_policy = self._mixed_precision_policy \
