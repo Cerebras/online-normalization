@@ -18,3 +18,14 @@ cd cuda
 ln -s /usr/local/cuda/include ./include
 ```
 
+3. Build the shared libraries
+
+```
+bash build.sh
+```
+
+4. Run the test file:
+
+```
+python kernel_example_test.py
+```
