@@ -366,11 +366,9 @@ class Norm(Layer):
     def call(self, inputs, training=None):
         """
         Call function will be called by __call__
-
         Arguments:
             inputs: activations into the layer
             training: Boolean to set training or inference mode
-
         Returns:
             normalized activations with multiplicative scale and additive bias
             corrections
