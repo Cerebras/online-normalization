@@ -239,74 +239,113 @@ class Norm(Layer):
             Returns
                 grad_delta: output deltas for inputs
             """
-            # deltas_shape = deltas.shape
-            # deltas = tf.reshape(deltas, [deltas_shape[0], deltas_shape[1], -1])
-            def bwd_fn(elem):
-                alpha_bkw = self.alpha_bkw
-                delta, i = elem
+            deltas_shape = deltas.shape
+            deltas = tf.reshape(deltas, [deltas_shape[0], deltas_shape[1], -1])
+            alpha_bkw = self.alpha_bkw
+            out_v, grad_tmp = online_norm_v_ctrl(
+                grad_out=deltas,
+                out=self.outputs,
+                in_v=self.v_ctrl,
+                abkw=alpha_bkw,
+            )
+            scale = self.s
+            print(f"scale: {scale.shape}")
+            print(f"deltas_shape: {deltas_shape}")
+            scale = tf.expand_dims(scale, -1)
+            print(f"scale: {scale.shape}")
+            scale = tf.broadcast_to(scale, deltas.shape)
+            print(f"scale: {scale.shape}")
+            grad_tmp = grad_tmp / scale
+            mu_delta = tf.reduce_mean(tf.cast(grad_tmp, tf.float32), 2)
+            out_u, d_u = online_norm_u_ctrl(
+                mu_delta=mu_delta,
+                in_u=self.u_ctrl,
+                abkw=alpha_bkw,
+                T=self.mp_type
+            )
+            d_u = tf.expand_dims(d_u, -1)
+            d_u = tf.broadcast_to(d_u, deltas.shape)
+            grad_in = (grad_tmp- d_u)
+            grad_in = tf.reshape(grad_in, deltas_shape)
 
-                # control with v
-                delta_temp = (
-                    delta -
-                    tf.reshape(
-                        tf.cast(self.v_ctrl, self.mp_type),
-                        self.broadcast_shape
-                    ) * self.outputs[i] * (1 - alpha_bkw)
-                )
+            update_v = tf.assign(
+                self.v_ctrl,
+                out_v
+            )
+            update_u = tf.assign(
+                self.u_ctrl,
+                out_u
+            )
+            with tf.control_dependencies([update_u, update_v, grad_in]):
+                grad_in = tf.identity(grad_in)
+                return grad_in
 
-                # update v control variables
-                # update the estimate of v controller, controlling
-                # orthogonality to normalizer output
-                update_v = tf.assign_add(
-                    self.v_ctrl,
-                    tf.reduce_mean(
-                        (
-                            tf.cast(delta_temp, self.fp_type) *
-                            tf.cast(self.outputs[i], self.fp_type)
-                        ),
-                        axis=self.norm_ax,
-                        keepdims=False
-                    )
-                )
+            # def bwd_fn(elem):
+            #     alpha_bkw = self.alpha_bkw
+            #     delta, i = elem
 
-                # s deltas
-                delta_temp_scaled = (
-                    delta_temp /
-                    tf.reshape(self.s[i], self.broadcast_shape)
-                )
+            #     # control with v
+            #     delta_temp = (
+            #         delta -
+            #         tf.reshape(
+            #             tf.cast(self.v_ctrl, self.mp_type),
+            #             self.broadcast_shape
+            #         ) * self.outputs[i] * (1 - alpha_bkw)
+            #     )
 
-                # control with u
-                grad_delta = (
-                    delta_temp_scaled -
-                    (1 - alpha_bkw) *
-                    tf.reshape(tf.cast(self.u_ctrl, self.mp_type),
-                               self.broadcast_shape)
-                )
+            #     # update v control variables
+            #     # update the estimate of v controller, controlling
+            #     # orthogonality to normalizer output
+            #     update_v = tf.assign_add(
+            #         self.v_ctrl,
+            #         tf.reduce_mean(
+            #             (
+            #                 tf.cast(delta_temp, self.fp_type) *
+            #                 tf.cast(self.outputs[i], self.fp_type)
+            #             ),
+            #             axis=self.norm_ax,
+            #             keepdims=False
+            #         )
+            #     )
 
-                # update u control variables
-                # update the estimate u controller which controls
-                # orthogonality to the 1 vector
-                update_u = tf.assign_add(
-                    self.u_ctrl,
-                    tf.reduce_mean(tf.cast(grad_delta, self.fp_type),
-                                   axis=self.norm_ax, keepdims=False)
-                )
+            #     # s deltas
+            #     delta_temp_scaled = (
+            #         delta_temp /
+            #         tf.reshape(self.s[i], self.broadcast_shape)
+            #     )
 
-                with tf.control_dependencies([update_u, update_v, grad_delta]):
-                    grad_in = tf.identity(grad_delta)
-                    return grad_in
+            #     # control with u
+            #     grad_delta = (
+            #         delta_temp_scaled -
+            #         (1 - alpha_bkw) *
+            #         tf.reshape(tf.cast(self.u_ctrl, self.mp_type),
+            #                    self.broadcast_shape)
+            #     )
 
-            with tf.control_dependencies([deltas]):
-                grad_deltas = tf.map_fn(
-                    bwd_fn,
-                    (deltas, tf.range(deltas.shape[0])),
-                    dtype=(deltas.dtype),
-                    parallel_iterations=1,
-                    back_prop=False,
-                )
+            #     # update u control variables
+            #     # update the estimate u controller which controls
+            #     # orthogonality to the 1 vector
+            #     update_u = tf.assign_add(
+            #         self.u_ctrl,
+            #         tf.reduce_mean(tf.cast(grad_delta, self.fp_type),
+            #                        axis=self.norm_ax, keepdims=False)
+            #     )
 
-                grad_inputs = tf.identity(grad_deltas)
-                return grad_inputs
+            #     with tf.control_dependencies([update_u, update_v, grad_delta]):
+            #         grad_in = tf.identity(grad_delta)
+            #         return grad_in
+
+            # with tf.control_dependencies([deltas]):
+            #     grad_deltas = tf.map_fn(
+            #         bwd_fn,
+            #         (deltas, tf.range(deltas.shape[0])),
+            #         dtype=(deltas.dtype),
+            #         parallel_iterations=1,
+            #         back_prop=False,
+            #     )
+
+            #     grad_inputs = tf.identity(grad_deltas)
+            #     return grad_inputs
 
         @tf.custom_gradient
         def forward(inputs):
