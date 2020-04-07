@@ -14,13 +14,21 @@ from tensorflow.python.keras import constraints, initializers, regularizers
 from tensorflow.python.keras.utils import tf_utils
 from tensorflow.python.keras.layers import Layer
 
+try:
+    online_norm_kernel = tf.load_op_library('./online_norm_tf/csrc/online_norm_gpu.so')
+except:
+    online_norm_kernel = tf.load_op_library('./online_norm_tf/csrc/online_norm_cpu.so')
+
+online_norm_fwd = online_norm_kernel.online_norm_fwd
+online_norm_u_ctrl = online_norm_kernel.online_norm_u_ctrl
+online_norm_v_ctrl = online_norm_kernel.online_norm_v_ctrl
 from tensorflow.keras.mixed_precision.experimental import Policy
 
 
 class Norm(Layer):
     """
-    Custom backprop normalizer implementation of the 
-    [Online Normalization Algorithm](https://arxiv.org/abs/1905.05894) 
+    Custom backprop normalizer implementation of the
+    [Online Normalization Algorithm](https://arxiv.org/abs/1905.05894)
 
     Note:
         Implemented with custom gradients, using the @tf.custom_gradient
@@ -41,7 +49,7 @@ class Norm(Layer):
         stream_var_initializer: Initializer for the streaming variance.
         u_ctrl_initializer: Initializer for the u control variable.
         v_ctrl_initializer: Initializer for the v control variable.
-        b_size: batch size used for training 
+        b_size: batch size used for training
         trainable: Boolean, if `True` also add variables to the graph
             collection `GraphKeys.TRAINABLE_VARIABLES`
             (see tf.Variable).  (Default: True)
@@ -71,11 +79,11 @@ class Norm(Layer):
 
         if isinstance(self.dtype_policy, Policy):
             self.mixed_precision = True
-            self.fp_type = tf.float32 # full precision 
+            self.fp_type = tf.float32 # full precision
             self.mp_type = tf.float16 # reduced precision
         else:
             self.mixed_precision = False
-            self.fp_type = self._dtype if self._dtype else tf.float32 # full precision 
+            self.fp_type = self._dtype if self._dtype else tf.float32 # full precision
             self.mp_type = self.fp_type # reduced precision
 
         self.b_size = b_size
@@ -311,58 +319,95 @@ class Norm(Layer):
                 netout: normalized activations
                 backward_wrapper: function handle for custom backward pass
             """
-            def fwd_fn(elem):
-                x, i, = elem
-                alpha = self.alpha_fwd
-
-                scale = tf.assign(
-                    self.s[i],
-                    tf.cast(tf.sqrt(self.var + self.epsilon), self.mp_type)
-                )
-
-                with tf.control_dependencies([scale]):
-                    mean = tf.reshape(tf.cast(self.mu, self.mp_type),
-                                      self.broadcast_shape)
-                    s = tf.reshape(self.s[i], self.broadcast_shape)
-                    output = (x - mean) / s
-                    out_assign = tf.assign(self.outputs[i], output)
-
-                # compute batch statistics
-                mu_bn, var_bn = tf.nn.moments(
-                    tf.cast(x, self.fp_type),
-                    self.norm_ax,
-                    keep_dims=False
-                )
-
-                with tf.control_dependencies([out_assign, mu_bn, var_bn]):
-                    # get the new mean and variances
-                    new_mu = self.mu + (1 - alpha) * (mu_bn - self.mu)
-                    new_var = (
-                        alpha * self.var + (1 - alpha) * var_bn +
-                        alpha * (1 - alpha) * tf.square(mu_bn - self.mu)
-                    )
-
-                # update the mean and variance
-                with tf.control_dependencies([output, new_mu, new_var]):
-                    update_mu = tf.assign(self.mu, new_mu, validate_shape=True)
-                    update_var = tf.assign(self.var,
-                                           new_var, validate_shape=True)
-
-                with tf.control_dependencies([update_mu, update_var]):
-                    netout = tf.identity(output)
-                    return netout
-
-            outputs = tf.map_fn(
-                fwd_fn,
-                (inputs, tf.range(inputs.shape[0])),
-                dtype=(inputs.dtype),
-                parallel_iterations=1,
-                back_prop=False,
+            input_shape = inputs.shape
+            inputs = tf.reshape(inputs, [input_shape[0], input_shape[1], -1])
+            mu, var = tf.nn.moments(
+                tf.cast(inputs, self.fp_type),
+                2,
+                keep_dims=False
             )
-
-            with tf.control_dependencies([outputs]):
+            mean, scale, out_s_mu, out_s_var = online_norm_fwd(
+                mu=mu,
+                var=var,
+                in_s_mu=self.mu,
+                in_s_var=self.var,
+                afwd=self.alpha_fwd,
+                eps=self.epsilon,
+                T=self.mp_type
+            )
+            with tf.control_dependencies([out_s_mu, out_s_var]):
+                update_mu = tf.assign(
+                    self.mu,
+                    out_s_mu,
+                    validate_shape=True
+                )
+                update_var = tf.assign(
+                    self.var,
+                    out_s_var,
+                    validate_shape=True
+                )
+            mean = tf.expand_dims(mean, -1)
+            mean = tf.broadcast_to(mean, inputs.shape)
+            scale = tf.expand_dims(scale, -1)
+            scale = tf.broadcast_to(scale, inputs.shape)
+            outputs = ((inputs - mean) / scale)
+            outputs = tf.reshape(outputs, input_shape)
+            with tf.control_dependencies([outputs, update_mu, update_var]):
                 netoutputs = tf.identity(outputs)
-                return netoutputs, backward
+            return netoutputs, backward
+
+            # def fwd_fn(elem):
+            #     x, i, = elem
+            #     alpha = self.alpha_fwd
+
+            #     scale = tf.assign(
+            #         self.s[i],
+            #         tf.cast(tf.sqrt(self.var + self.epsilon), self.mp_type)
+            #     )
+
+            #     with tf.control_dependencies([scale]):
+            #         mean = tf.reshape(tf.cast(self.mu, self.mp_type),
+            #                           self.broadcast_shape)
+            #         s = tf.reshape(self.s[i], self.broadcast_shape)
+            #         output = (x - mean) / s
+            #         out_assign = tf.assign(self.outputs[i], output)
+
+            #     # compute batch statistics
+            #     mu_bn, var_bn = tf.nn.moments(
+            #         tf.cast(x, self.fp_type),
+            #         self.norm_ax,
+            #         keep_dims=False
+            #     )
+
+            #     with tf.control_dependencies([out_assign, mu_bn, var_bn]):
+            #         # get the new mean and variances
+            #         new_mu = self.mu + (1 - alpha) * (mu_bn - self.mu)
+            #         new_var = (
+            #             alpha * self.var + (1 - alpha) * var_bn +
+            #             alpha * (1 - alpha) * tf.square(mu_bn - self.mu)
+            #         )
+
+            #     # update the mean and variance
+            #     with tf.control_dependencies([output, new_mu, new_var]):
+            #         update_mu = tf.assign(self.mu, new_mu, validate_shape=True)
+            #         update_var = tf.assign(self.var,
+            #                                new_var, validate_shape=True)
+
+            #     with tf.control_dependencies([update_mu, update_var]):
+            #         netout = tf.identity(output)
+            #         return netout
+
+            # outputs = tf.map_fn(
+            #     fwd_fn,
+            #     (inputs, tf.range(inputs.shape[0])),
+            #     dtype=(inputs.dtype),
+            #     parallel_iterations=1,
+            #     back_prop=False,
+            # )
+
+            # with tf.control_dependencies([outputs]):
+            #     netoutputs = tf.identity(outputs)
+            #     return netoutputs, backward
 
         return forward(inputs)
 
@@ -422,7 +467,7 @@ class Norm(Layer):
                 None,
                 self.epsilon
             )
-            
+
         outputs = tf.cast(outputs, self.mp_type)
 
         return outputs
@@ -453,7 +498,7 @@ class NormBatched(Layer):
         stream_var_initializer: Initializer for the streaming variance.
         u_ctrl_initializer: Initializer for the u control variable.
         v_ctrl_initializer: Initializer for the v control variable.
-        b_size: batch size used for training 
+        b_size: batch size used for training
         trainable: Boolean, if `True` also add variables to the graph
             collection `GraphKeys.TRAINABLE_VARIABLES`
             (see tf.Variable).  (Default: True)
@@ -476,7 +521,7 @@ class NormBatched(Layer):
                  b_size=None, trainable=True, name=None, **kwargs):
         super(NormBatched, self).__init__(trainable=trainable,
                                           name=name, **kwargs)
-        
+
         # setup mixed precesion
         self.dtype_policy = self._mixed_precision_policy \
             if self._mixed_precision_policy.name == "infer_float32_vars" \
@@ -484,11 +529,11 @@ class NormBatched(Layer):
 
         if isinstance(self.dtype_policy, Policy):
             self.mixed_precision = True
-            self.fp_type = tf.float32 # full precision 
+            self.fp_type = tf.float32 # full precision
             self.mp_type = tf.float16 # reduced precision
         else:
             self.mixed_precision = False
-            self.fp_type = self._dtype if self._dtype else tf.float32 # full precision 
+            self.fp_type = self._dtype if self._dtype else tf.float32 # full precision
             self.mp_type = self.fp_type # reduced precision
 
         self.b_size = b_size
@@ -1078,7 +1123,7 @@ class NormBatched(Layer):
                 None,
                 self.epsilon
             )
-        
+
         outputs = tf.cast(outputs, self.mp_type)
 
         return outputs
@@ -1086,8 +1131,8 @@ class NormBatched(Layer):
 
 class OnlineNorm(Layer):
     """
-    Implementation of the 
-    [Online Normalization Layer](https://arxiv.org/abs/1905.05894) 
+    Implementation of the
+    [Online Normalization Layer](https://arxiv.org/abs/1905.05894)
 
     Arguments:
         alpha_fwd: the decay factor to be used in fprop to update statistics.
@@ -1121,7 +1166,7 @@ class OnlineNorm(Layer):
         batch_acceleration: enable batch accelerated variant of norm. Requires
             knowing the batch size apriori. Automatically diabled if batch size
             is 1 or None. Default: True
-        b_size: batch size used for training 
+        b_size: batch size used for training
         trainable: Boolean, if `True` also add variables to the graph
             collection `GraphKeys.TRAINABLE_VARIABLES`
             (see tf.Variable).  (Default: True)
@@ -1156,11 +1201,11 @@ class OnlineNorm(Layer):
 
         if isinstance(self.dtype_policy, Policy):
             self.mixed_precision = True
-            self.fp_type = tf.float32 # full precision 
+            self.fp_type = tf.float32 # full precision
             self.mp_type = tf.float16 # reduced precision
         else:
             self.mixed_precision = False
-            self.fp_type = self._dtype if self._dtype else tf.float32 # full precision 
+            self.fp_type = self._dtype if self._dtype else tf.float32 # full precision
             self.mp_type = self.fp_type # reduced precision
 
         if self.mixed_precision:
@@ -1178,7 +1223,7 @@ class OnlineNorm(Layer):
         assert isinstance(b_size, int), 'batch size (b_size) is a required integer parameter'
         batch_acceleration = False if b_size == 1 else batch_acceleration
         norm_func = NormBatched if batch_acceleration else Norm
-        
+
         self.normalization = norm_func(
             alpha_fwd=alpha_fwd,
             alpha_bkw=alpha_bkw,
@@ -1279,7 +1324,7 @@ class OnlineNorm(Layer):
             self.beta = None
 
         self.built = True
-    
+
     def layer_scaling(self, inputs):
         """
         Scale full layer by 2nd moment
@@ -1298,7 +1343,7 @@ class OnlineNorm(Layer):
             ),
             self.mp_type
         )
-        
+
         return inputs * tf.rsqrt(scale + self.ls_eps)
 
     def activation_clamp(self, inputs):

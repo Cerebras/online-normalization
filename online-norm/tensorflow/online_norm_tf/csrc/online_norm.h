@@ -1,5 +1,6 @@
 #ifndef ONLINE_NORM_H_
 #define ONLINE_NORM_H_
+
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/op_kernel.h"
 

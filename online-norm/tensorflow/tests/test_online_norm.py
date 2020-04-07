@@ -122,7 +122,7 @@ class TestOnlineNorm(unittest.TestCase):
         in_shape = np_inputs.shape
         batch_size = in_shape[0]
         NpOnlineNorm = NpOnlineNorm2d if len(in_shape) == 4 else NpOnlineNorm1d
-        # Instantiate numpy layer 
+        # Instantiate numpy layer
         np_norm = NpOnlineNorm(
             in_shape[1],
             alpha_fwd=alpha_fwd,

@@ -2,10 +2,14 @@
 #include "online_norm.h"
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/op_kernel.h"
+#include "tensorflow/core/framework/register_types.h"
+
+#ifndef CPU_ONLY
 #include "tensorflow/core/util/gpu_kernel_helper.h"
 #include "tensorflow/core/util/gpu_launch_config.h"
 #include "third_party/gpus/cuda/include/cuda_fp16.h"
-#include "tensorflow/core/framework/register_types.h"
+#endif //CPU_ONLY
+
 
 using namespace tensorflow;
 using CPUDevice = Eigen::ThreadPoolDevice;
@@ -51,7 +55,7 @@ REGISTER_OP("OnlineNormVCtrl")
   .Output("out_v: float")
   .Output("grad_tmp: T");
 
-
+#ifndef CPU_ONLY
 extern template struct OnlineNormFwdFunctor<GPUDevice, float>;
 extern template struct OnlineNormFwdFunctor<GPUDevice, Eigen::half>;
 
@@ -60,7 +64,7 @@ extern template struct OnlineNormUCtrlFunctor<GPUDevice, Eigen::half>;
 
 extern template struct OnlineNormVCtrlFunctor<GPUDevice, float>;
 extern template struct OnlineNormVCtrlFunctor<GPUDevice, Eigen::half>;
-
+#endif //CPU_ONLY
 
 // CPU specialization of actual computation.
 template <typename T>
@@ -324,6 +328,7 @@ REGISTER_CPU(float);
 REGISTER_CPU(Eigen::half);
 
 // Register the GPU kernels.
+#ifndef CPU_ONLY
 #define REGISTER_GPU(T)                                          \
   REGISTER_KERNEL_BUILDER(                                       \
       Name("OnlineNormFwd").Device(DEVICE_GPU).TypeConstraint<T>("T"), \
@@ -337,4 +342,5 @@ REGISTER_CPU(Eigen::half);
 
 REGISTER_GPU(float);
 REGISTER_GPU(Eigen::half);
+#endif //CPU_ONLY
 
