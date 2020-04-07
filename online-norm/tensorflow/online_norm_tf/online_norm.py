@@ -2,7 +2,6 @@
 Released under BSD 3-Clause License,
 Copyright (c) 2019 Cerebras Systems Inc.
 All rights reserved.
-
 TensorFlow Implementation of the Online Normalization Layer
 """
 import warnings
@@ -21,11 +20,9 @@ class Norm(Layer):
     """
     Custom backprop normalizer implementation of the 
     [Online Normalization Algorithm](https://arxiv.org/abs/1905.05894) 
-
     Note:
         Implemented with custom gradients, using the @tf.custom_gradient
         decorator which requires tf.__version__ >= 1.7
-
     Arguments:
         alpha_fwd: the decay factor to be used in fprop to update statistics.
             Default: 0.999
@@ -45,15 +42,12 @@ class Norm(Layer):
         trainable: Boolean, if `True` also add variables to the graph
             collection `GraphKeys.TRAINABLE_VARIABLES`
             (see tf.Variable).  (Default: True)
-
     Input shape:
       Arbitrary. Use the keyword argument `input_shape` (tuple of integers,
                  does not include the samples axis) when using this layer as
                  the first layer in a model.
-
     Output shape:
         Same shape as input.
-
     References:
         - [Online Normalization for Training Neural Networks](https://arxiv.org/abs/1905.05894)
     """
@@ -197,25 +191,18 @@ class Norm(Layer):
         Normalization algorithm) as described in the paper:
         `Online Normalization for Training Neural Networks`.
         This class implements a version of the mathematics below.
-
         .. math::
             y_t = \frac{x_t - \mu_{t-1}}{\sqrt{\sigma^2_{t-1} + \epsilon}}
-
             \sigma^2_t = (
                 \alpha * \sigma^2_{t-1} +
                 \alpha * (1 - \alpha) * (x_t - \mu_{t-1}) ^ 2
             )
-
             \mu_t = \alpha * \mu_{t-1} + (1 - \alpha) * x_t
-
         The mean and standard-deviation are estimated per-feature.
-
         forward is decorated with @tf.custom_gradient and has its backward pass
         defined in backward.
-
         Arguments
             inputs: input activations
-
         Returns:
             netout: list: [forward normalized activations,
                            backward function]
@@ -224,10 +211,8 @@ class Norm(Layer):
             """
             Wrapper for the custom backwards pass using ctrl process
             Note: deltas depends on fprop output
-
             Arguments:
                 deltas: input deltas from the current batch
-
             Returns
                 grad_delta: output deltas for inputs
             """
@@ -303,10 +288,8 @@ class Norm(Layer):
         def forward(inputs):
             """
             Function for forward pass.
-
             Arguments:
                 inputs: activations of the current batch
-
             Returns:
                 netout: normalized activations
                 backward_wrapper: function handle for custom backward pass
@@ -433,11 +416,9 @@ class NormBatched(Layer):
     Custom backprop normalizer implementation of the
     [Online Normalization Algorithm](https://arxiv.org/abs/1905.05894)
     with acceleration for batch processing.
-
     Note:
         Implemented with custom gradients, using the @tf.custom_gradient
         decorator which requires tf.__version__ >= 1.7
-
     Arguments:
         alpha_fwd: the decay factor to be used in fprop to update statistics.
             Default: 0.999
@@ -457,14 +438,12 @@ class NormBatched(Layer):
         trainable: Boolean, if `True` also add variables to the graph
             collection `GraphKeys.TRAINABLE_VARIABLES`
             (see tf.Variable).  (Default: True)
-
     Input shape:
       Arbitrary. Use the keyword argument `input_shape` (tuple of integers,
                  does not include the samples axis) when using this layer as
                  the first layer in a model.
     Output shape:
         Same shape as input.
-
     References:
         - [Online Normalization for Training Neural Networks](https://arxiv.org/abs/1905.05894)
     """
@@ -710,26 +689,19 @@ class NormBatched(Layer):
         Normalization algorithm) as described in the paper:
         `Online Normalization for Training Neural Networks`.
         This class implements a version of the mathematics below.
-
         .. math::
             y_t = \frac{x_t - \mu_{t-1}}{\sqrt{\sigma^2_{t-1} + \epsilon}}
-
             \sigma^2_t = \alpha * \sigma^2_{t-1} + \alpha * (1 - \alpha) * (x_t - \mu_{t-1}) ^ 2
             \mu_t = \alpha * \mu_{t-1} + (1 - \alpha) * x_t
-
         The mean and standard-deviation are estimated per-feature.
-
         The math above represents the calculations occurring in the layer. To
         speed up computation with batched training we linearize the computation
         along the batch dimension and use convolutions in place of loops to
         distribute the computation across compute fabric.
-
         forward is decorated with @tf.custom_gradient and has its backward pass
         defined in backward.
-
         Arguments
             inputs: input activations
-
         Returns:
             netout: list: [forward normalized activations,
                            backward function]
@@ -740,10 +712,8 @@ class NormBatched(Layer):
             Helper function for streaming across the batch dimension for a
             momentum system using linear operations.
             Useful for GPU acceleration of streaming control layer.
-
             Used in mu, var, and u_ctrl updates
             Note: v_ctrl needs separate controller
-
             Arguments
                 stat_prev: previous time steps statistics
                 stat_curr: this time steps statistics
@@ -751,13 +721,11 @@ class NormBatched(Layer):
                 momentum: the momentum of the system
                 momentum_pow: momentum ** range(b_size - 1, -1, -1)
                 momentum_batch: momentum ** b_size
-
             Returns:
                 stream_t1: 1 time step stale estimates of statistics
                            one for each example in batch
                 stream_curr: estimates of statistics
                              one for each example in batch
-
             """
 
             tmp = tf.concat([stat_prev, stat_curr], axis=0)[1:]
@@ -777,15 +745,12 @@ class NormBatched(Layer):
             """
             Helper function to convolve along 2b dimension with a b length
             vector of 1's
-
             Arguments:
                 input: input of shape (b, 2b, c)
                 b: b_size
                 c: number of features
-
             Returns
                 d: deltas convolved along the 2b dimension with a 1 filter
-
             """
             c_input = tf.transpose(tf.reshape(tf.transpose(input,
                                                            perm=[1, 0, 2]),
@@ -820,14 +785,12 @@ class NormBatched(Layer):
                        abkw=self.abkw, norm_ax=self.norm_ax, clip_min=1e-37):
             """
             Helper function to linearize the v controller
-
             Note:
                 - This is originally created / hard-coded for channel_first
                 operation
                 - There are edge cases where the math breaks down
                 i.e. we take a log of alpha, therefore we must clip alpha such
                 that alpha > 0. alpha = 1 - (1 - abkw) * (out ** 2)
-
             Arguments:
                 deltas: input deltas to the v controller
                 out: the output of the forward pass
@@ -838,13 +801,11 @@ class NormBatched(Layer):
                 num_features: number of features
                 abkw: decay factor for the controller
                 clip_min: the epsilon by which to clip alpha
-
             Returns
                 grad_delta: output deltas for inputs
                 v_new: v control current
                 alpha: alpha of this time step to be cached
                 beta: beta of this time step to be cached
-
             """
             # expect 0 << alpha ~<1 so we can move it to log space
             delta = tf.cast(delta_out, self.fp_type)
@@ -870,7 +831,7 @@ class NormBatched(Layer):
             Acirlog2 = tf.concat(
                 [
                     Acirlog,
-                    tf.constant([0.], dtype=self.mp_type,
+                    tf.constant([0.], dtype=self.fp_type,
                                 shape=[b_size, b_size, num_features])
                 ],
                 1
@@ -878,7 +839,7 @@ class NormBatched(Layer):
 
             # conv along batch dim
             # in log same as prod over the same indexes
-            Aconvlog = conv_alongb_w1(Acirlog2, b_size, num_features)
+            Aconvlog = tf.cast(conv_alongb_w1(tf.cast(Acirlog2,self.mp_type), b_size, num_features),self.fp_type)
 
             CD = tf.exp(Aconvlog)
             Bcir = tf.reshape(
@@ -910,10 +871,8 @@ class NormBatched(Layer):
             """
             Wrapper for the custom backwards pass using ctrl process
             Note: deltas depends on fprop output
-
             Arguments:
                 deltas: input deltas from the current batch
-
             Returns
                 grad_delta: output deltas for inputs
             """
@@ -940,18 +899,18 @@ class NormBatched(Layer):
                     axis=tuple(self.norm_ax),
                     keepdims=False
                 )
-
-                _u_ctrl, u_ctrl = momentum_stat(self.u_ctrl_p, dmean,
-                                                self.u_ctrl, abkw,
+                dmean = tf.cast(dmean,self.mp_type)
+                _u_ctrl, u_ctrl = momentum_stat(tf.cast(self.u_ctrl_p,self.mp_type), dmean,
+                                                tf.cast(self.u_ctrl,self.mp_type), abkw,
                                                 self.abpow, self.abbatch)
 
                 with tf.control_dependencies([_u_ctrl, u_ctrl]):
-                    u_update = self.u_ctrl.assign(u_ctrl)
-                    u_p_update = self.u_ctrl_p.assign(dmean)
+                    u_update = self.u_ctrl.assign(tf.cast(u_ctrl,self.fp_type))
+                    u_p_update = self.u_ctrl_p.assign(tf.cast(dmean,self.fp_type))
 
-                    v_p_update = self.v_p.assign(v_p)
-                    alpha_p_update = self.alpha_p.assign(alpha_p)
-                    beta_p_update = self.beta_p.assign(beta_p)
+                    v_p_update = self.v_p.assign(tf.cast(v_p,self.fp_type))
+                    alpha_p_update = self.alpha_p.assign(tf.cast(alpha_p,self.fp_type))
+                    beta_p_update = self.beta_p.assign(tf.cast(beta_p,self.fp_type))
 
                     grad_delta = (
                         delta_temp_scaled -
@@ -970,10 +929,8 @@ class NormBatched(Layer):
         def forward(inputs):
             """
             Function for forward pass.
-
             Arguments:
                 inputs: activations of the current batch
-
             Returns:
                 netout: normalized activations
                 backward_wrapper: function handle for custom backward pass
@@ -987,11 +944,11 @@ class NormBatched(Layer):
             var = tf.cast(var, self.mp_type)
 
             # get instance statistics
-            _mu_b, mu_b = momentum_stat(self.mu_p, mu, self.mu,
+            _mu_b, mu_b = momentum_stat(tf.cast(self.mu_p,self.mp_type), mu, tf.cast(self.mu,self.mp_type),
                                         afwd, self.afpow, self.afbatch)
 
             var_current = var + afwd * (mu - _mu_b) ** 2
-            s, var_b = momentum_stat(self.var_p, var_current, self.var,
+            s, var_b = momentum_stat(tf.cast(self.var_p,self.mp_type), var_current, tf.cast(self.var,self.mp_type),
                                      afwd, self.afpow, self.afbatch)
 
             scale = self.s.assign(tf.sqrt(s + self.epsilon))
@@ -1008,11 +965,11 @@ class NormBatched(Layer):
             out_assign = self.outputs.assign(out)
 
             with tf.control_dependencies([out_assign]):
-                update_mu = self.mu.assign(mu_b)
-                update_var = self.var.assign(var_b)
+                update_mu = self.mu.assign(tf.cast(mu_b,self.fp_type))
+                update_var = self.var.assign(tf.cast(var_b,self.fp_type))
 
-                update_mu_p = self.mu_p.assign(mu)
-                update_var_p = self.var_p.assign(var_current)
+                update_mu_p = self.mu_p.assign(tf.cast(mu,self.fp_type))
+                update_var_p = self.var_p.assign(tf.cast(var_current,self.fp_type))
 
             with tf.control_dependencies([update_mu, update_var,
                                           update_mu_p, update_var_p]):
@@ -1024,11 +981,9 @@ class NormBatched(Layer):
     def call(self, inputs, training=None):
         """
         Call function will be called by __call__
-
         Arguments:
             inputs: activations into the layer
             training: Boolean to set training or inference mode
-
         Returns:
             normalized activations with multiplicative scale and additive bias
             corrections
@@ -1088,7 +1043,6 @@ class OnlineNorm(Layer):
     """
     Implementation of the 
     [Online Normalization Layer](https://arxiv.org/abs/1905.05894) 
-
     Arguments:
         alpha_fwd: the decay factor to be used in fprop to update statistics.
             Default: 0.999
@@ -1125,14 +1079,12 @@ class OnlineNorm(Layer):
         trainable: Boolean, if `True` also add variables to the graph
             collection `GraphKeys.TRAINABLE_VARIABLES`
             (see tf.Variable).  (Default: True)
-
     Input shape:
       Arbitrary. Use the keyword argument `input_shape` (tuple of integers,
                  does not include the samples axis) when using this layer as
                  the first layer in a model.
     Output shape:
         Same shape as input.
-
     References:
         - [Online Normalization for Training Neural Networks](https://arxiv.org/abs/1905.05894)
     """
@@ -1283,10 +1235,8 @@ class OnlineNorm(Layer):
     def layer_scaling(self, inputs):
         """
         Scale full layer by 2nd moment
-
         Arguments:
             inputs: input activations
-
         Returns
             activations scaled by their second moment
         """
@@ -1304,10 +1254,8 @@ class OnlineNorm(Layer):
     def activation_clamp(self, inputs):
         """
         Clips the output of CN.
-
         Arguments:
             inputs: input activations
-
         Returns
             clamped activations
         """
@@ -1316,11 +1264,9 @@ class OnlineNorm(Layer):
     def call(self, inputs, training=None):
         """
         Call function will be called by __call__
-
         Arguments:
             inputs: activations into the layer
             training: Boolean to set training or inference mode
-
         Returns:
             normalized activations with multiplicative scale and additive bias
             corrections
@@ -1390,7 +1336,6 @@ def online_norm(
 ):
     """
     Functional interface to the Online Normalization Layer defined above
-
     Arguments:
         inputs: The inputs to the layer.
         training: a boolean value that when set to `True`, the
@@ -1425,7 +1370,6 @@ def online_norm(
             collection `GraphKeys.TRAINABLE_VARIABLES`
             (see tf.Variable). (Default: True)
         b_size: batch size which is being trained. (Default: 1)
-
     Return:
         Normalization Layer output
     """
