@@ -49,8 +49,7 @@ output = norm(input)
 
 To test after installation:
 ```bash
-python -m tests.test_online_norm_1d
-python -m tests.test_online_norm_2d
+python setup.py test
 ```
 
 ## change log
