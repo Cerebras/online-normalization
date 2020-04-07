@@ -228,58 +228,6 @@ class Norm(Layer):
             netout: list: [forward normalized activations,
                            backward function]
         """
-        def backward(deltas):
-            """
-            Wrapper for the custom backwards pass using ctrl process
-            Note: deltas depends on fprop output
-
-            Arguments:
-                deltas: input deltas from the current batch
-
-            Returns
-                grad_delta: output deltas for inputs
-            """
-            deltas_shape = deltas.shape
-            deltas = tf.reshape(deltas, [deltas_shape[0], deltas_shape[1], -1])
-            alpha_bkw = self.alpha_bkw
-            out_v, grad_tmp = online_norm_v_ctrl(
-                grad_out=deltas,
-                out=self.outputs,
-                in_v=self.v_ctrl,
-                abkw=alpha_bkw,
-            )
-            scale = self.s
-            print(f"scale: {scale.shape}")
-            print(f"deltas_shape: {deltas_shape}")
-            scale = tf.expand_dims(scale, -1)
-            print(f"scale: {scale.shape}")
-            scale = tf.broadcast_to(scale, deltas.shape)
-            print(f"scale: {scale.shape}")
-            grad_tmp = grad_tmp / scale
-            mu_delta = tf.reduce_mean(tf.cast(grad_tmp, tf.float32), 2)
-            out_u, d_u = online_norm_u_ctrl(
-                mu_delta=mu_delta,
-                in_u=self.u_ctrl,
-                abkw=alpha_bkw,
-                T=self.mp_type
-            )
-            d_u = tf.expand_dims(d_u, -1)
-            d_u = tf.broadcast_to(d_u, deltas.shape)
-            grad_in = (grad_tmp- d_u)
-            grad_in = tf.reshape(grad_in, deltas_shape)
-
-            update_v = tf.assign(
-                self.v_ctrl,
-                out_v
-            )
-            update_u = tf.assign(
-                self.u_ctrl,
-                out_u
-            )
-            with tf.control_dependencies([update_u, update_v, grad_in]):
-                grad_in = tf.identity(grad_in)
-                return grad_in
-
         @tf.custom_gradient
         def forward(inputs):
             """
@@ -329,6 +277,55 @@ class Norm(Layer):
             output_assign = tf.assign(self.outputs, outputs, validate_shape=True)
             with tf.control_dependencies([scale, output_assign, update_mu, update_var]):
                 netoutputs = tf.identity(outputs)
+
+            def backward(deltas):
+                """
+                Wrapper for the custom backwards pass using ctrl process
+                Note: deltas depends on fprop output
+
+                Arguments:
+                    deltas: input deltas from the current batch
+
+                Returns
+                    grad_delta: output deltas for inputs
+                """
+                deltas_shape = deltas.shape
+                deltas = tf.reshape(deltas, [deltas_shape[0], deltas_shape[1], -1])
+                alpha_bkw = self.alpha_bkw
+                out_v, grad_tmp = online_norm_v_ctrl(
+                    grad_out=deltas,
+                    out=self.outputs,
+                    in_v=self.v_ctrl,
+                    abkw=alpha_bkw,
+                )
+                scale = self.s
+                scale = tf.expand_dims(scale, -1)
+                scale = tf.broadcast_to(scale, deltas.shape)
+                grad_tmp = grad_tmp / scale
+                mu_delta = tf.reduce_mean(tf.cast(grad_tmp, tf.float32), 2)
+                out_u, d_u = online_norm_u_ctrl(
+                    mu_delta=mu_delta,
+                    in_u=self.u_ctrl,
+                    abkw=alpha_bkw,
+                    T=self.mp_type
+                )
+                d_u = tf.expand_dims(d_u, -1)
+                d_u = tf.broadcast_to(d_u, deltas.shape)
+                grad_in = (grad_tmp- d_u)
+                grad_in = tf.reshape(grad_in, deltas_shape)
+
+                update_v = tf.assign(
+                    self.v_ctrl,
+                    out_v
+                )
+                update_u = tf.assign(
+                    self.u_ctrl,
+                    out_u
+                )
+                with tf.control_dependencies([update_u, update_v, grad_in]):
+                    grad_in = tf.identity(grad_in)
+                    return grad_in
+
             return netoutputs, backward
 
         return forward(inputs)
