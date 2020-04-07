@@ -934,7 +934,7 @@ class NormBatched(Layer):
                     axis=tuple(self.norm_ax),
                     keepdims=False
                 )
-                
+
                 _u_ctrl, u_ctrl = momentum_stat(self.u_ctrl_p, dmean,
                                                 self.u_ctrl, abkw,
                                                 self.abpow, self.abbatch)
