@@ -462,7 +462,6 @@ class NormBatched(Layer):
       Arbitrary. Use the keyword argument `input_shape` (tuple of integers,
                  does not include the samples axis) when using this layer as
                  the first layer in a model.
-
     Output shape:
         Same shape as input.
 
@@ -714,6 +713,7 @@ class NormBatched(Layer):
 
         .. math::
             y_t = \frac{x_t - \mu_{t-1}}{\sqrt{\sigma^2_{t-1} + \epsilon}}
+
             \sigma^2_t = \alpha * \sigma^2_{t-1} + \alpha * (1 - \alpha) * (x_t - \mu_{t-1}) ^ 2
             \mu_t = \alpha * \mu_{t-1} + (1 - \alpha) * x_t
 
@@ -739,8 +739,10 @@ class NormBatched(Layer):
             Helper function for streaming across the batch dimension for a
             momentum system using linear operations.
             Useful for GPU acceleration of streaming control layer.
+
             Used in mu, var, and u_ctrl updates
             Note: v_ctrl needs separate controller
+
             Arguments
                 stat_prev: previous time steps statistics
                 stat_curr: this time steps statistics
@@ -748,6 +750,7 @@ class NormBatched(Layer):
                 momentum: the momentum of the system
                 momentum_pow: momentum ** range(b_size - 1, -1, -1)
                 momentum_batch: momentum ** b_size
+
             Returns:
                 stream_t1: 1 time step stale estimates of statistics
                            one for each example in batch
@@ -772,12 +775,15 @@ class NormBatched(Layer):
             """
             Helper function to convolve along 2b dimension with a b length
             vector of 1's
+
             Arguments:
                 input: input of shape (b, 2b, c)
                 b: b_size
                 c: number of features
+
             Returns
                 d: deltas convolved along the 2b dimension with a 1 filter
+
             """
             c_input = tf.transpose(tf.reshape(tf.transpose(input,
                                                            perm=[1, 0, 2]),
@@ -1121,7 +1127,6 @@ class OnlineNorm(Layer):
       Arbitrary. Use the keyword argument `input_shape` (tuple of integers,
                  does not include the samples axis) when using this layer as
                  the first layer in a model.
-
     Output shape:
         Same shape as input.
 
@@ -1296,10 +1301,10 @@ class OnlineNorm(Layer):
     def activation_clamp(self, inputs):
         """
         Clips the output of CN.
-        
+
         Arguments:
             inputs: input activations
-        
+
         Returns
             clamped activations
         """
