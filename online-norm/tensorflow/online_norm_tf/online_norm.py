@@ -356,59 +356,6 @@ class Norm(Layer):
                 netoutputs = tf.identity(outputs)
             return netoutputs, backward
 
-            # def fwd_fn(elem):
-            #     x, i, = elem
-            #     alpha = self.alpha_fwd
-
-            #     scale = tf.assign(
-            #         self.s[i],
-            #         tf.cast(tf.sqrt(self.var + self.epsilon), self.mp_type)
-            #     )
-
-            #     with tf.control_dependencies([scale]):
-            #         mean = tf.reshape(tf.cast(self.mu, self.mp_type),
-            #                           self.broadcast_shape)
-            #         s = tf.reshape(self.s[i], self.broadcast_shape)
-            #         output = (x - mean) / s
-            #         out_assign = tf.assign(self.outputs[i], output)
-
-            #     # compute batch statistics
-            #     mu_bn, var_bn = tf.nn.moments(
-            #         tf.cast(x, self.fp_type),
-            #         self.norm_ax,
-            #         keep_dims=False
-            #     )
-
-            #     with tf.control_dependencies([out_assign, mu_bn, var_bn]):
-            #         # get the new mean and variances
-            #         new_mu = self.mu + (1 - alpha) * (mu_bn - self.mu)
-            #         new_var = (
-            #             alpha * self.var + (1 - alpha) * var_bn +
-            #             alpha * (1 - alpha) * tf.square(mu_bn - self.mu)
-            #         )
-
-            #     # update the mean and variance
-            #     with tf.control_dependencies([output, new_mu, new_var]):
-            #         update_mu = tf.assign(self.mu, new_mu, validate_shape=True)
-            #         update_var = tf.assign(self.var,
-            #                                new_var, validate_shape=True)
-
-            #     with tf.control_dependencies([update_mu, update_var]):
-            #         netout = tf.identity(output)
-            #         return netout
-
-            # outputs = tf.map_fn(
-            #     fwd_fn,
-            #     (inputs, tf.range(inputs.shape[0])),
-            #     dtype=(inputs.dtype),
-            #     parallel_iterations=1,
-            #     back_prop=False,
-            # )
-
-            # with tf.control_dependencies([outputs]):
-            #     netoutputs = tf.identity(outputs)
-            #     return netoutputs, backward
-
         return forward(inputs)
 
     def call(self, inputs, training=None):
