@@ -269,13 +269,15 @@ class Norm(Layer):
                 )
             mean = tf.expand_dims(mean, -1)
             mean = tf.broadcast_to(mean, inputs.shape)
-            scale = tf.assign(self.s, scale)
+            scale_assign = tf.assign(self.s, scale)
             scale = tf.expand_dims(scale, -1)
             scale = tf.broadcast_to(scale, inputs.shape)
             outputs = ((inputs - mean) / scale)
             outputs = tf.reshape(outputs, input_shape)
             output_assign = tf.assign(self.outputs, outputs, validate_shape=True)
-            with tf.control_dependencies([scale, output_assign, update_mu, update_var]):
+            with tf.control_dependencies(
+                [scale_assign, output_assign, update_mu, update_var]
+            ):
                 netoutputs = tf.identity(outputs)
 
             def backward(deltas):
@@ -292,9 +294,10 @@ class Norm(Layer):
                 deltas_shape = deltas.shape
                 deltas = tf.reshape(deltas, [deltas_shape[0], deltas_shape[1], -1])
                 alpha_bkw = self.alpha_bkw
+                back_outputs = tf.reshape(self.outputs, [deltas_shape[0], deltas_shape[1], -1])
                 out_v, grad_tmp = online_norm_v_ctrl(
                     grad_out=deltas,
-                    out=self.outputs,
+                    out=back_outputs,
                     in_v=self.v_ctrl,
                     abkw=alpha_bkw,
                 )
