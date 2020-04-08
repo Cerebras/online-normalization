@@ -17,6 +17,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)) + "/../..")
 from numpy_on import OnlineNorm1d as NpOnlineNorm1d
 from numpy_on import OnlineNorm2d as NpOnlineNorm2d
 
+from tensorflow.keras.mixed_precision.experimental import Policy
 
 tf.logging.set_verbosity(tf.logging.ERROR)
 
@@ -413,6 +414,7 @@ class TestOnlineNorm(unittest.TestCase):
         alpha_fwd=0.99,
         alpha_bkw=0.99,
         itrs=2,
+        dtype=None,
     ):
         """
         Test ON Batched Layer against ON for 2d inputs
@@ -433,6 +435,7 @@ class TestOnlineNorm(unittest.TestCase):
             ecm='',
             b_size=batch_size,
             batch_acceleration=False,
+            dtype=dtype,
         )
 
         if np_grad_out is not None:
@@ -458,6 +461,7 @@ class TestOnlineNorm(unittest.TestCase):
             ecm='',
             b_size=batch_size,
             batch_acceleration=True,
+            dtype=dtype,
         )
 
         if np_grad_out is not None:
@@ -510,12 +514,15 @@ class TestOnlineNorm(unittest.TestCase):
                         )[0][0]
                     )
 
+                rtol = 1e-4 if dtype==None else 1e-2
+                atol = 1e-5 if dtype==None else 1e-3
+
                 # numerically compare output
                 err_msg=f'output comparison failed on itr: {itr}'
                 np.testing.assert_allclose(
                     out,
                     out_batched,
-                    rtol=1e-4, atol=1e-5, err_msg=err_msg
+                    rtol=rtol, atol=atol, err_msg=err_msg
                 )
 
                 if np_grad_out is not None:
@@ -524,7 +531,7 @@ class TestOnlineNorm(unittest.TestCase):
                     np.testing.assert_allclose(
                         tf_grad_xs,
                         tf_grad_xs_batched,
-                        rtol=1e-4, atol=1e-5, err_msg=err_msg
+                        rtol=rtol, atol=atol, err_msg=err_msg
                     )
 
     def test041_1d_numerical_comparison_onbatched_vs_on(
@@ -573,6 +580,30 @@ class TestOnlineNorm(unittest.TestCase):
             alpha_fwd=alpha_fwd,
             alpha_bkw=alpha_bkw,
             itrs=itrs,
+        )
+
+    def test043_1d_numerical_comparison_onbatched_vs_on_mp(
+        self,
+        batch_size=8,
+        num_features=16,
+        alpha_fwd=0.99,
+        alpha_bkw=0.99,
+        itrs=2,
+    ):
+        """
+        Test ON Batched Layer's fprop against ON for 1d inputs
+        """
+        # create inputs
+        np_inputs = np.random.randn(batch_size, num_features) + .25
+        tf.keras.backend.set_floatx('float16')
+        self.template_numerical_comparison_onbatched_vs_on(
+            np_inputs,
+            np_grad_out=None,
+            axis=1,
+            alpha_fwd=alpha_fwd,
+            alpha_bkw=alpha_bkw,
+            itrs=itrs,
+            dtype=Policy('infer_float32_vars')
         )
 
     def test051_1d_numerical_comparison_onbatched_vs_on(
