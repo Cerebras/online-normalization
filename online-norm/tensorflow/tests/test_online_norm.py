@@ -170,13 +170,13 @@ class TestOnlineNorm(unittest.TestCase):
                     # bprop through numpy Online Norm class
                     np_grad_in = np_norm.backward(np_grad_out)
 
-
-                # get the output of the tf layer
-                on_tf_out = sess.run(
-                    [tf_norm],
-                    feed_dict={tf_inputs: np_inputs}
-                )
-                out = np.array(on_tf_out[0])
+                if np_grad_out is None:
+                    # get the output of the tf layer
+                    on_tf_out = sess.run(
+                        [tf_norm],
+                        feed_dict={tf_inputs: np_inputs}
+                    )
+                    out = np.array(on_tf_out[0])
 
                 if np_grad_out is not None:
                     # get the deltas of the tf layer
@@ -189,13 +189,14 @@ class TestOnlineNorm(unittest.TestCase):
                         )[0][0]
                     )
 
-                # numerically compare output
-                err_msg=f'output comparison failed on itr: {itr}'
-                np.testing.assert_allclose(
-                    out,
-                    np_out,
-                    rtol=1e-4, atol=1e-5, err_msg=err_msg
-                )
+                if np_grad_out is None:
+                    # numerically compare output
+                    err_msg=f'output comparison failed on itr: {itr}'
+                    np.testing.assert_allclose(
+                        out,
+                        np_out,
+                        rtol=1e-4, atol=1e-5, err_msg=err_msg
+                    )
 
                 if np_grad_out is not None:
                     # numerically compare deltas
@@ -478,12 +479,13 @@ class TestOnlineNorm(unittest.TestCase):
 
             # Iterate over generated data
             for itr in range(itrs):
-                # get the output of the tf layer
-                on_tf_out = sess.run(
-                    [tf_norm],
-                    feed_dict={tf_inputs: np_inputs}
-                )
-                out = np.array(on_tf_out[0])
+                if np_grad_out is None:
+                    # get the output of the tf layer
+                    on_tf_out = sess.run(
+                        [tf_norm],
+                        feed_dict={tf_inputs: np_inputs}
+                    )
+                    out = np.array(on_tf_out[0])
 
                 if np_grad_out is not None:
                     # get the deltas of the tf layer
@@ -517,13 +519,14 @@ class TestOnlineNorm(unittest.TestCase):
                 rtol = 1e-4 if dtype==None else 1e-2
                 atol = 1e-5 if dtype==None else 1e-3
 
-                # numerically compare output
-                err_msg=f'output comparison failed on itr: {itr}'
-                np.testing.assert_allclose(
-                    out,
-                    out_batched,
-                    rtol=rtol, atol=atol, err_msg=err_msg
-                )
+                if np_grad_out is None:
+                    # numerically compare output
+                    err_msg=f'output comparison failed on itr: {itr}'
+                    np.testing.assert_allclose(
+                        out,
+                        out_batched,
+                        rtol=rtol, atol=atol, err_msg=err_msg
+                    )
 
                 if np_grad_out is not None:
                     # numerical compare deltas
