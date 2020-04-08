@@ -141,59 +141,65 @@ class Norm(Layer):
                     self.broadcast_shape.append(1)
 
         # streaming normalization statistics
-        self.mu = self.add_variable(
+        self.mu = self.add_weight(
             'mu',
             stat_shape,
             initializer=self.stream_mu_initializer,
             dtype=self.fp_type,
             trainable=False,
-            experimental_autocast=False
+            experimental_autocast=False,
+            use_resource=True,
         )
 
-        self.var = self.add_variable(
+        self.var = self.add_weight(
             'var',
             stat_shape,
             initializer=self.stream_var_initializer,
             dtype=self.fp_type,
             trainable=False,
-            experimental_autocast=False
+            experimental_autocast=False,
+            use_resource=True,
         )
 
-        self.s = self.add_variable(
+        self.s = self.add_weight(
             's',
             [self.b_size] + stat_shape,
             initializer=self.stream_var_initializer,
             dtype=self.mp_type,
             trainable=False,
-            experimental_autocast=False
+            experimental_autocast=False,
+            use_resource=True,
         )
 
-        self.outputs = self.add_variable(
+        self.outputs = self.add_weight(
             'outputs',
             [self.b_size] + input_shape[1:],
             initializer=tf.zeros_initializer,
             dtype=self.mp_type,
             trainable=False,
-            experimental_autocast=False
+            experimental_autocast=False,
+            use_resource=True,
         )
 
         # u and v control variables
-        self.u_ctrl = self.add_variable(
+        self.u_ctrl = self.add_weight(
             'u_ctrl',
             stat_shape,
             initializer=self.u_ctrl_initializer,
             dtype=self.fp_type,
             trainable=False,
-            experimental_autocast=False
+            experimental_autocast=False,
+            use_resource=True,
         )
 
-        self.v_ctrl = self.add_variable(
+        self.v_ctrl = self.add_weight(
             'v_ctrl',
             stat_shape,
             initializer=self.v_ctrl_initializer,
             dtype=self.fp_type,
             trainable=False,
-            experimental_autocast=False
+            experimental_autocast=False,
+            use_resource=True,
         )
 
         self.built = True
@@ -255,29 +261,40 @@ class Norm(Layer):
                 eps=self.epsilon,
                 T=self.mp_type
             )
-            with tf.control_dependencies([out_s_mu, out_s_var]):
-                update_mu = tf.assign(
-                    self.mu,
-                    out_s_mu,
-                    validate_shape=True
-                )
-                update_var = tf.assign(
-                    self.var,
-                    out_s_var,
-                    validate_shape=True
-                )
+            #with tf.control_dependencies([out_s_mu, out_s_var]):
+            update_mu = tf.assign(
+                self.mu,
+                out_s_mu,
+                validate_shape=True
+            )
+            update_var = tf.assign(
+                self.var,
+                out_s_var,
+                validate_shape=True
+            )
             mean = tf.expand_dims(mean, -1)
             mean = tf.broadcast_to(mean, inputs.shape)
-            scale_assign = tf.assign(self.s, scale)
+            scale_assign = tf.assign(self.s, scale, name="scale_assign")
             scale = tf.expand_dims(scale, -1)
             scale = tf.broadcast_to(scale, inputs.shape)
             outputs = ((inputs - mean) / scale)
             outputs = tf.reshape(outputs, input_shape)
-            output_assign = tf.assign(self.outputs, outputs, validate_shape=True)
+            output_1 = tf.Print(outputs, [outputs], message="output1")
+            output_assign = tf.assign(self.outputs, outputs, validate_shape=True, name="output_assign")
+            output_2 = tf.Print(output_assign, [output_assign], message="output2")
             with tf.control_dependencies(
-                [scale_assign, output_assign, update_mu, update_var]
+                [
+                    scale_assign,
+                    output_assign,
+                    update_mu,
+                    update_var,
+                    output_1,
+                    output_2
+                ]
             ):
                 netoutputs = tf.identity(outputs)
+
+                netoutputs = tf.Print(netoutputs, [netoutputs], message="output_final")
 
             def backward(deltas):
                 """
@@ -293,7 +310,10 @@ class Norm(Layer):
                 deltas_shape = deltas.shape
                 deltas = tf.reshape(deltas, [deltas_shape[0], deltas_shape[1], -1])
                 alpha_bkw = self.alpha_bkw
-                back_outputs = tf.reshape(self.outputs, [deltas_shape[0], deltas_shape[1], -1])
+
+                output_3 = tf.Print(self.outputs, [self.outputs], message="output3")
+                output_4 = tf.Print(output_3, [output_3], message="output4")
+                back_outputs = tf.reshape(output_4, [deltas_shape[0], deltas_shape[1], -1])
                 out_v, grad_tmp = online_norm_v_ctrl(
                     grad_out=deltas,
                     out=back_outputs,
@@ -1307,7 +1327,7 @@ class OnlineNorm(Layer):
             return tf.reshape(inputs, bcast_shape)
 
         # streaming / control normalization
-        outputs = self.normalization.apply(inputs, training)
+        outputs = self.normalization(inputs, training)
 
         # scale and bias
         if self.scale:
@@ -1419,4 +1439,4 @@ def online_norm(
         name=name,
         **kwargs
     )
-    return layer.apply(inputs, training=training)
+    return layer(inputs, training=training)
