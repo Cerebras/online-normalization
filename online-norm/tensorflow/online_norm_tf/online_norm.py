@@ -994,14 +994,14 @@ class NormBatched(Layer):
 
             s = tf.cast(s,self.mp_type)
             _mu_b = tf.cast(_mu_b,self.mp_type)
-            scale = self.s.assign(tf.cast(tf.sqrt(s + self.epsilon),self.mp_type))
+            scale = self.s.assign(tf.sqrt(tf.cast(s,self.mp_type) + self.epsilon))
 
             with tf.control_dependencies([scale]):
                 # perform normalization with previous time steps statistics
                 out = tf.nn.batch_normalization(inputs,
-                                                reshape(_mu_b,
+                                                reshape(tf.cast(_mu_b,self.mp_type),
                                                         norm_ax=self.norm_ax),
-                                                reshape(s,
+                                                reshape(tf.cast(s,self.mp_type),
                                                         norm_ax=self.norm_ax),
                                                 None, None, self.epsilon)
 
