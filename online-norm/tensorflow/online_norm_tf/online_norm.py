@@ -159,7 +159,6 @@ class Norm(Layer):
             experimental_autocast=False
         )
 
-        # bprop cache variables
         self.s = self.add_variable(
             's',
             [self.b_size] + stat_shape,
@@ -531,7 +530,7 @@ class NormBatched(Layer):
                 [1.],
                 shape=[self.b_size, self.ch]
             ),
-            self.mp_type
+            self.fp_type
         )
         self.afpow = tf.cast(
             tf.reshape(
@@ -541,7 +540,7 @@ class NormBatched(Layer):
                 ),
                 (self.b_size, 1, 1)
             ),
-            self.mp_type
+            self.fp_type
         )
 
         # batch streaming parameters fpass
@@ -550,7 +549,7 @@ class NormBatched(Layer):
                 [1.],
                 shape=[self.b_size, self.ch]
             ),
-            self.mp_type
+            self.fp_type
         )
         self.abpow = tf.cast(
             tf.reshape(
@@ -560,7 +559,7 @@ class NormBatched(Layer):
                 ),
                 (self.b_size, 1, 1)
             ),
-            self.mp_type
+            self.fp_type
         )
 
         # streaming normalization statistics
@@ -756,7 +755,7 @@ class NormBatched(Layer):
                                               [2 * b, -1]))
             out = tf.nn.conv1d(
                 tf.expand_dims(c_input, 2),
-                tf.constant([1.], dtype=self.mp_type, shape=[b, 1, 1]),
+                tf.constant([1.], dtype=self.fp_type, shape=[b, 1, 1]),
                 stride=1,
                 padding='VALID',
                 data_format="NWC"
@@ -834,7 +833,7 @@ class NormBatched(Layer):
             Acirlog2 = tf.concat(
                 [
                     Acirlog,
-                    tf.constant([0.], dtype=self.mp_type,
+                    tf.constant([0.], dtype=self.fp_type,
                                 shape=[b_size, b_size, num_features])
                 ],
                 1
@@ -947,8 +946,6 @@ class NormBatched(Layer):
             # compute batch statistics
             mu, var = tf.nn.moments(tf.cast(inputs, self.fp_type),
                                           self.norm_ax, keep_dims=False)
-            mu = tf.cast(mu, self.mp_type)
-            var = tf.cast(var, self.mp_type)
 
             # get instance statistics
             _mu_b, mu_b = momentum_stat(self.mu_p, mu, self.mu,
@@ -958,14 +955,14 @@ class NormBatched(Layer):
             s, var_b = momentum_stat(self.var_p, var_current, self.var,
                                      afwd, self.afpow, self.afbatch)
 
-            scale = self.s.assign(tf.sqrt(s + self.epsilon))
+            scale = self.s.assign(tf.sqrt(tf.cast(s,self.mp_type) + self.epsilon))
 
             with tf.control_dependencies([scale]):
                 # perform normalization with previous time steps statistics
                 out = tf.nn.batch_normalization(inputs,
-                                                reshape(_mu_b,
+                                                reshape(tf.cast(_mu_b,self.mp_type),
                                                         norm_ax=self.norm_ax),
-                                                reshape(s,
+                                                reshape(tf.cast(s,self.mp_type),
                                                         norm_ax=self.norm_ax),
                                                 None, None, self.epsilon)
 
