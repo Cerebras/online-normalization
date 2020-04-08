@@ -740,8 +740,10 @@ class NormBatched(Layer):
             Helper function for streaming across the batch dimension for a
             momentum system using linear operations.
             Useful for GPU acceleration of streaming control layer.
+
             Used in mu, var, and u_ctrl updates
             Note: v_ctrl needs separate controller
+
             Arguments
                 stat_prev: previous time steps statistics
                 stat_curr: this time steps statistics
@@ -749,11 +751,13 @@ class NormBatched(Layer):
                 momentum: the momentum of the system
                 momentum_pow: momentum ** range(b_size - 1, -1, -1)
                 momentum_batch: momentum ** b_size
+
             Returns:
                 stream_t1: 1 time step stale estimates of statistics
                            one for each example in batch
                 stream_curr: estimates of statistics
                              one for each example in batch
+
             """
 
             tmp = tf.concat([stat_prev, stat_curr], axis=0)[1:]
@@ -781,6 +785,7 @@ class NormBatched(Layer):
 
             Returns
                 d: deltas convolved along the 2b dimension with a 1 filter
+
             """
             c_input = tf.transpose(tf.reshape(tf.transpose(input,
                                                            perm=[1, 0, 2]),
@@ -839,6 +844,7 @@ class NormBatched(Layer):
                 v_new: v control current
                 alpha: alpha of this time step to be cached
                 beta: beta of this time step to be cached
+
             """
             # expect 0 << alpha ~<1 so we can move it to log space
             delta = tf.cast(delta_out, self.fp_type)
