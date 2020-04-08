@@ -263,11 +263,12 @@ class Norm(Layer):
             )
             update_mu = tf.assign(self.mu, out_s_mu, validate_shape=True)
             update_var = tf.assign(self.var ,out_s_var, validate_shape=True)
-            mean = tf.broadcast_to(tf.expand_dims(mean, -1), inputs.shape)
-            scale = tf.identity(tf.expand_dims(scale, -1))
-            scale = tf.broadcast_to(scale, inputs.shape)
-            outputs = tf.identity((inputs - mean) / scale)
-            out = tf.reshape(outputs, input_shape)
+            with tf.control_dependencies([update_mu, update_var]):
+                mean = tf.broadcast_to(tf.expand_dims(mean, -1), inputs.shape)
+                scale = tf.expand_dims(scale, -1)
+                scale = tf.broadcast_to(scale, inputs.shape)
+                outputs = ((inputs - mean) / scale)
+                out = tf.reshape(outputs, input_shape)
 
             def backward(deltas):
                 """
@@ -301,18 +302,13 @@ class Norm(Layer):
                 )
                 d_u = tf.expand_dims(d_u, -1)
                 d_u = tf.broadcast_to(d_u, deltas.shape)
-                grad_in = (grad_tmp- d_u)
+                grad_in = grad_tmp - d_u
                 grad_in = tf.reshape(grad_in, deltas_shape)
 
-                update_v = tf.assign(
-                    self.v_ctrl,
-                    out_v
-                )
-                update_u = tf.assign(
-                    self.u_ctrl,
-                    out_u
-                )
-                with tf.control_dependencies([update_u, update_v]):
+                update_v = tf.assign(self.v_ctrl, out_v)
+                update_u = tf.assign(self.u_ctrl, out_u)
+
+                with tf.control_dependencies([update_u, update_v, update_mu, update_var]):
                     grad_in = tf.identity(grad_in)
                     return (grad_in, )
 
