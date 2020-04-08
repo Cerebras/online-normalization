@@ -59,8 +59,6 @@ class TestOnlineNorm(unittest.TestCase):
             center=False,
             scale=False,
             ecm='',
-            b_size=batch_size,
-            batch_acceleration=False,
         )
 
         if np_grad_out is not None:

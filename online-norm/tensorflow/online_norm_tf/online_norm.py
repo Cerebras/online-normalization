@@ -49,7 +49,6 @@ class Norm(Layer):
         stream_var_initializer: Initializer for the streaming variance.
         u_ctrl_initializer: Initializer for the u control variable.
         v_ctrl_initializer: Initializer for the v control variable.
-        b_size: batch size used for training
         trainable: Boolean, if `True` also add variables to the graph
             collection `GraphKeys.TRAINABLE_VARIABLES`
             (see tf.Variable).  (Default: True)
@@ -70,7 +69,7 @@ class Norm(Layer):
                  axis=-1, epsilon=1e-5,
                  stream_mu_initializer='zeros', stream_var_initializer='ones',
                  u_ctrl_initializer='zeros', v_ctrl_initializer='zeros',
-                 b_size=None, trainable=True, name=None, **kwargs):
+                 trainable=True, name=None, **kwargs):
         super(Norm, self).__init__(trainable=trainable, name=name, **kwargs)
         # setup mixed precesion
         self.dtype_policy = self._mixed_precision_policy \
@@ -86,7 +85,6 @@ class Norm(Layer):
             self.fp_type = self._dtype if self._dtype else tf.float32 # full precision
             self.mp_type = self.fp_type # reduced precision
 
-        self.b_size = b_size
         self.axis = axis
         self.norm_ax = None
         self.epsilon = epsilon
@@ -394,10 +392,6 @@ class OnlineNorm(Layer):
             Choice: `ac` (Activation Clamping) | `ls` (Layer Scaling).
         ls_eps: if ecm is `ls`, this is the `ls` eps.
         clamp_val: if ecm is `ac` this is the clamp value.
-        batch_acceleration: enable batch accelerated variant of norm. Requires
-            knowing the batch size apriori. Automatically diabled if batch size
-            is 1 or None. Default: True
-        b_size: batch size used for training
         trainable: Boolean, if `True` also add variables to the graph
             collection `GraphKeys.TRAINABLE_VARIABLES`
             (see tf.Variable).  (Default: True)
@@ -421,8 +415,8 @@ class OnlineNorm(Layer):
                  beta_initializer='zeros', gamma_initializer='ones',
                  beta_regularizer=None, gamma_regularizer=None,
                  beta_constraint=None, gamma_constraint=None,
-                 ecm='ac', ls_eps=1e-05, clamp_val=5, batch_acceleration=True,
-                 b_size=None, trainable=True, name=None, **kwargs):
+                 ecm='ac', ls_eps=1e-05, clamp_val=5,
+                 trainable=True, name=None, **kwargs):
         super(OnlineNorm, self).__init__(trainable=trainable,
                                          name=name, **kwargs)
         # setup mixed precesion
@@ -451,11 +445,7 @@ class OnlineNorm(Layer):
 
         self.axis = axis
 
-        assert isinstance(b_size, int), 'batch size (b_size) is a required integer parameter'
-        batch_acceleration = False if b_size == 1 else batch_acceleration
-        norm_func = Norm
-
-        self.normalization = norm_func(
+        self.normalization = Norm(
             alpha_fwd=alpha_fwd,
             alpha_bkw=alpha_bkw,
             axis=axis,
@@ -464,7 +454,6 @@ class OnlineNorm(Layer):
             stream_var_initializer=stream_var_initializer,
             u_ctrl_initializer=u_ctrl_initializer,
             v_ctrl_initializer=v_ctrl_initializer,
-            b_size=b_size,
             trainable=trainable,
             **kwargs
         )
@@ -658,9 +647,7 @@ def online_norm(
     ecm='ac',
     ls_eps=1e-05,
     clamp_val=5,
-    batch_acceleration=True,
     trainable=True,
-    b_size=1,
     name=None,
     **kwargs
 ):
@@ -700,7 +687,6 @@ def online_norm(
         trainable: Boolean, if `True` also add variables to the graph
             collection `GraphKeys.TRAINABLE_VARIABLES`
             (see tf.Variable). (Default: True)
-        b_size: batch size which is being trained. (Default: 1)
 
     Return:
         Normalization Layer output
@@ -725,9 +711,7 @@ def online_norm(
         ecm=ecm,
         ls_eps=ls_eps,
         clamp_val=clamp_val,
-        batch_acceleration=batch_acceleration,
         trainable=trainable,
-        b_size=b_size,
         name=name,
         **kwargs
     )
