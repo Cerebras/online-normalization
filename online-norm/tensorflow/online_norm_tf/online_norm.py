@@ -66,7 +66,7 @@ class Norm(Layer):
     """
 
     def __init__(self, alpha_fwd=0.999, alpha_bkw=0.99,
-                 axis=-1, epsilon=1e-5,
+                 axis=1, epsilon=1e-5,
                  stream_mu_initializer='zeros', stream_var_initializer='ones',
                  u_ctrl_initializer='zeros', v_ctrl_initializer='zeros',
                  trainable=True, name=None, **kwargs):
@@ -84,6 +84,8 @@ class Norm(Layer):
             self.mixed_precision = False
             self.fp_type = self._dtype if self._dtype else tf.float32 # full precision
             self.mp_type = self.fp_type # reduced precision
+
+        assert axis == 1, 'kernel requires channels_first data_format'
 
         self.axis = axis
         self.norm_ax = None

@@ -22,27 +22,7 @@ N, C, H, W = 8, 256, 32, 32
 inputs = numpy.random.randn(N, C, H, W)
 
 input_placeholder = tf.placeholder(tf.float32, shape=(N, C, H, W))
-norm = online_norm(input_placeholder, training=True, axis=1, b_size=N)
-
-sess = tf.Session()
-sess.run(tf.global_variables_initializer())
-
-# get the output of the tf version of the layer
-out = sess.run([norm], feed_dict={input_placeholder: inputs})
-```
-
-### For use with spatially 2D tensors in channel_last format
-Given your input tensor is of shape: `(N, H, W, C)`
-```
-import numpy
-import tensorflow as tf
-from online_norm_tf import online_norm
-
-N, H, W, C = 8, 32, 32, 256
-inputs = numpy.random.randn(N, H, W, C)
-
-input_placeholder = tf.placeholder(tf.float32, shape=(N, H, W, C))
-norm = online_norm(input_placeholder, training=True, axis=-1, b_size=N)
+norm = online_norm(input_placeholder, training=True)
 
 sess = tf.Session()
 sess.run(tf.global_variables_initializer())
@@ -62,7 +42,7 @@ N, C = 8, 256
 inputs = numpy.random.randn(N, C)
 
 input_placeholder = tf.placeholder(tf.float32, shape=(N, C))
-norm = online_norm(input_placeholder, training=True, axis=1, b_size=N)
+norm = online_norm(input_placeholder, training=True)
 
 sess = tf.Session()
 sess.run(tf.global_variables_initializer())
@@ -95,3 +75,9 @@ python setup.py test
 
 - Loop version of OnlineNorm implemented
 - Tests updated
+
+### 2020-04-01
+
+#### Added
+
+- Added CUDA kernel for online norm (removed python loop version of norm and NormBatched)
