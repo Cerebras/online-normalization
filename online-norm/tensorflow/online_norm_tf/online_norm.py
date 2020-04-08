@@ -161,26 +161,6 @@ class Norm(Layer):
             use_resource=True,
         )
 
-        # self.s = self.add_variable(
-        #     's',
-        #     [self.b_size] + stat_shape,
-        #     initializer=self.stream_var_initializer,
-        #     dtype=self.mp_type,
-        #     trainable=False,
-        #     experimental_autocast=False,
-        #     use_resource=True,
-        # )
-
-        # self.outputs = self.add_variable(
-        #     'outputs',
-        #     [self.b_size] + input_shape[1:],
-        #     initializer=tf.zeros_initializer,
-        #     dtype=self.mp_type,
-        #     trainable=False,
-        #     experimental_autocast=False,
-        #     use_resource=True,
-        # )
-
         # u and v control variables
         self.u_ctrl = self.add_variable(
             'u_ctrl',
@@ -310,7 +290,7 @@ class Norm(Layer):
 
                 with tf.control_dependencies([update_u, update_v, update_mu, update_var]):
                     grad_in = tf.identity(grad_in)
-                    return (grad_in, )
+                    return grad_in
 
             with tf.control_dependencies([update_mu, update_var]):
                 return out, backward
