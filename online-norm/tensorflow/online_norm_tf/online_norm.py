@@ -260,9 +260,11 @@ class Norm(Layer):
                     grad_delta: output deltas for inputs
                 """
                 deltas_shape = deltas.shape
-                deltas = tf.reshape(deltas, [deltas_shape[0], deltas_shape[1], -1])
+                deltas = tf.reshape(
+                    deltas,
+                    [deltas_shape[0], deltas_shape[1], -1]
+                )
                 alpha_bkw = self.alpha_bkw
-
                 out_v, grad_tmp = online_norm_v_ctrl(
                     grad_out=deltas,
                     out=outputs,
@@ -286,7 +288,9 @@ class Norm(Layer):
                 update_v = tf.assign(self.v_ctrl, out_v)
                 update_u = tf.assign(self.u_ctrl, out_u)
 
-                with tf.control_dependencies([update_u, update_v, update_mu, update_var]):
+                with tf.control_dependencies(
+                    [update_u, update_v, update_mu, update_var]
+                ):
                     grad_in = tf.identity(grad_in)
                     return grad_in
 
