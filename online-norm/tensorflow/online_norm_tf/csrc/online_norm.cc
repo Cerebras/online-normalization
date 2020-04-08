@@ -18,7 +18,7 @@ using GPUDevice = Eigen::GpuDevice;
 #define Idx3(n, c, d, N, C, D) (((n)*(C)*(D)) + ((c)*(D)) + (d))
 #define Idx2(n, c, N, C) (((n)*(C)) + (c))
 
-// changing design. Assuming will match directly with kernels. Rest will come from TF python
+
 
 // 1. norm_fwd_kernel
 // 2. norm_uctrl_kernel
