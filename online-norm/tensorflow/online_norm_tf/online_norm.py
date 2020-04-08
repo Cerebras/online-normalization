@@ -151,7 +151,6 @@ class Norm(Layer):
             experimental_autocast=False
         )
 
-        # bprop cache variables
         self.s = self.add_variable(
             's',
             [self.b_size] + stat_shape,
@@ -992,8 +991,6 @@ class NormBatched(Layer):
             s, var_b = momentum_stat(self.var_p, var_current, self.var,
                                      afwd, self.afpow, self.afbatch)
 
-            s = tf.cast(s,self.mp_type)
-            _mu_b = tf.cast(_mu_b,self.mp_type)
             scale = self.s.assign(tf.sqrt(tf.cast(s,self.mp_type) + self.epsilon))
 
             with tf.control_dependencies([scale]):
