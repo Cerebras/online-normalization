@@ -39,10 +39,8 @@ class Norm(Layer):
             Default: 0.999
         alpha_bkw: the decay factor to be used in bprop to control the
             gradients propagating through the network. Default: 0.99
-        axis: Integer, the axis that should be normalized (typically the
-            features axis). For instance, after a `Conv2D` layer with
-            `data_format="channels_first"`, set `axis=1` in
-            `OnlineNormalization`. Default: -1
+        axis: Integer, the axis that should be normalized. Defualt: 1
+            Note kernel only supports 1
         epsilon: a value added to the denominator for numerical stability.
             Default: 1e-5.
         stream_mu_initializer: Initializer for the streaming mean.
@@ -374,10 +372,8 @@ class OnlineNorm(Layer):
             Default: 0.999
         alpha_bkw: the decay factor to be used in bprop to control the
             gradients propagating through the network. Default: 0.99
-        axis: Integer, the axis that should be normalized (typically the
-            features axis). For instance, after a `Conv2D` layer with
-            `data_format="channels_first"`, set `axis=1` in
-            `OnlineNormalization`. Default: -1
+        axis: Integer, the axis that should be normalized. Defualt: 1
+            Note kernel only supports 1
         epsilon: a value added to the denominator for numerical stability.
             Default: 1e-5.
         stream_mu_initializer: Initializer for the streaming mean.
@@ -414,7 +410,7 @@ class OnlineNorm(Layer):
     """
 
     def __init__(self, alpha_fwd=0.999, alpha_bkw=0.99,
-                 axis=-1, epsilon=1e-5,
+                 axis=1, epsilon=1e-5,
                  stream_mu_initializer='zeros', stream_var_initializer='ones',
                  u_ctrl_initializer='zeros', v_ctrl_initializer='zeros',
                  center=True, scale=True,
@@ -636,7 +632,7 @@ def online_norm(
     training=False,
     alpha_fwd=0.999,
     alpha_bkw=0.99,
-    axis=-1,
+    axis=1,
     epsilon=1e-5,
     stream_mu_initializer='zeros',
     stream_var_initializer='ones',
@@ -670,10 +666,8 @@ def online_norm(
             gradients propagating through the network. Default: 0.99
         layer_scaling: a boolean determining whether layer scaling is applied
             as the final stage of normalization. Default: `True`
-        axis: Integer, the axis that should be normalized (typically the
-            features axis). For instance, after a `Conv2D` layer with
-            `data_format="channels_first"`, set `axis=1` in
-            `OnlineNormalization`. Default: -1
+        axis: Integer, the axis that should be normalized. Defualt: 1
+            Note kernel only supports 1
         epsilon: a value added to the denominator for numerical stability.
             Default: 1e-5.
         center: a boolean value that when set to `True`, this module has
