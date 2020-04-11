@@ -334,27 +334,17 @@ class Norm(Layer):
 
         # streaming / control normalization
         if training is not False:
-            outputs = tf_utils.smart_cond(
-                training,
-                lambda: self.normalization(precise_inputs),
-                lambda: tf.nn.batch_normalization(
-                    precise_inputs,
-                    _bcast(self.mu),
-                    _bcast(self.var),
-                    None,
-                    None,
-                    self.epsilon
-                )
-            )
+            outputs = self.normalization(precise_inputs)
         else:
-            outputs = tf.nn.batch_normalization(
-                precise_inputs,
-                _bcast(self.mu),
-                _bcast(self.var),
-                None,
-                None,
-                self.epsilon
+            mu = tf.cast(_bcast(self.mu), self.mp_type)
+            denom = tf.cast(
+                tf.math.sqrt(
+                    self.var + self.epsilon
+                ),
+                self.mp_type
             )
+            outputs = (inputs - mu) / _bcast(denom)
+        outputs = tf.cast(outputs, self.mp_type)
 
         outputs = tf.cast(outputs, self.mp_type)
 
