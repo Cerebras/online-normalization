@@ -346,8 +346,6 @@ class Norm(Layer):
             outputs = (inputs - mu) / _bcast(denom)
         outputs = tf.cast(outputs, self.mp_type)
 
-        outputs = tf.cast(outputs, self.mp_type)
-
         return outputs
 
 
