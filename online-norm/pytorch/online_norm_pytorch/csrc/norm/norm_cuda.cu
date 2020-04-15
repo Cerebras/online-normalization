@@ -113,33 +113,6 @@ std::vector<at::Tensor> norm_fwd_cuda(
   return {out, scale, s_mu, s_var};
 }
 
-template <typename scalar_t>
-__global__ void norm_uctrl_kernel(
-    const float* __restrict__ mu_delta,
-    float* __restrict__ s_u,
-    scalar_t* __restrict__ d_u,
-    const unsigned int C, const unsigned int N,
-    const float abkw) {
-
-  const int c = blockIdx.x * blockDim.x + threadIdx.x;
-  if (c < C) {
-    int idx;
-    float delta;
-    float s_u_local = s_u[c];
-
-    for(int n = 0; n < N; ++n){
-      idx = Idx2(n, c, N, C);
-      d_u[idx] = (scalar_t)(s_u_local);
-
-      delta = mu_delta[idx] - s_u_local;
-
-      s_u_local = s_u_local + (1. - abkw) * delta;
-    };
-
-    s_u[c] = s_u_local;
-  };
-}
-
 __device__ void warp_reduce(volatile float *s_mem, const unsigned int t_id, const unsigned int d) {
   for (unsigned int ridx = 32; ridx > 0; ridx /= 2) {
     if (d > ridx) { if (t_id < ridx) { if ((t_id + ridx) < d) { s_mem[t_id] += s_mem[t_id + ridx]; } } __syncwarp(); }
@@ -147,11 +120,13 @@ __device__ void warp_reduce(volatile float *s_mem, const unsigned int t_id, cons
 }
 
 template <typename scalar_t>
-__global__ void norm_vctrl_kernel(
+__global__ void norm_bwd_ctrl_kernel(
     const scalar_t* __restrict__ grad_out,
     float* s_v,
+    float* s_u,
     const scalar_t* __restrict__ out,
-    scalar_t* __restrict__ grad_tmp,
+    scalar_t* __restrict__ scale,
+    scalar_t* __restrict__ grad_in,
     const unsigned int C, const unsigned int N, const unsigned int D,
     const float abkw) {
 
@@ -160,26 +135,49 @@ __global__ void norm_vctrl_kernel(
   const unsigned int d = blockDim.x;
   unsigned int idx3, idx;
 
-  extern __shared__ float s_mem[];
+  extern __shared__ float s_mem_v[];
+  float *s_mem_u = &s_mem_v[d];
+
+  scalar_t grad_tmp;
 
   for(int n = 0; n < N; ++n){
-    s_mem[t_id] = 0;                                // reset shared mem
+    s_mem_v[t_id] = 0;                              // reset shared mem
+    s_mem_u[t_id] = 0;                              // reset shared mem
     for (idx = t_id; idx < D; idx += d) {
       idx3 = Idx3(n, c, idx, N, C, D);              // idx in global mem
+
       // vctrl logic
-      grad_tmp[idx3] = grad_out[idx3] - (1. - (scalar_t)(abkw)) * (scalar_t)(s_v[c]) * out[idx3];
-      s_mem[t_id] += (float)(grad_tmp[idx3]) * (float)(out[idx3]);    // start reduction
+      grad_tmp = grad_out[idx3] - (1. - (scalar_t)(abkw)) * (scalar_t)(s_v[c]) * out[idx3];
+      s_mem_v[t_id] += (float)(grad_tmp) * (float)(out[idx3]);    // start reduction
+      
+      // scale grad
+      grad_tmp = grad_tmp / scale[Idx2(n, c, N, C)];
+
+      // uctrl logic
+      grad_in[idx3] = grad_tmp - (1. - (scalar_t)(abkw)) * (scalar_t)(s_u[c]);
+      s_mem_u[t_id] += (float)(grad_in[idx3]);      // start reduction
     };  
     __syncthreads();
 
+    // update vctrl
     // reduce within thread block % warp reduction
     for (idx = 512; idx > 32; idx /= 2) {
-      if (d > idx) { if (t_id < idx) { if ((t_id + idx) < d) { s_mem[t_id] += s_mem[t_id + idx]; } } __syncthreads(); }
+      if (d > idx) { if (t_id < idx) { if ((t_id + idx) < d) { s_mem_v[t_id] += s_mem_v[t_id + idx]; } } __syncthreads(); }
     }
-    if (t_id < 32) { warp_reduce(s_mem, t_id, d); }     // reduce within warp
+    if (t_id < 32) { warp_reduce(s_mem_v, t_id, d); }     // reduce within warp
 
     // update vctrl / mv reduction to global mem
-    if (t_id == 0) { s_v[c] += (s_mem[0] / D); }
+    if (t_id == 0) { s_v[c] += (s_mem_v[0] / D); }
+
+    // update uctrl
+    // reduce within thread block % warp reduction
+    for (idx = 512; idx > 32; idx /= 2) {
+      if (d > idx) { if (t_id < idx) { if ((t_id + idx) < d) { s_mem_u[t_id] += s_mem_u[t_id + idx]; } } __syncthreads(); }
+    }
+    if (t_id < 32) { warp_reduce(s_mem_u, t_id, d); }     // reduce within warp
+
+    // update uctrl / mv reduction to global mem
+    if (t_id == 0) { s_u[c] += (s_mem_u[0] / D); }
     __syncthreads();
   }
   __syncthreads();
@@ -198,50 +196,28 @@ std::vector<at::Tensor> norm_bwd_cuda(
   CHECK_INPUT(out);
   CHECK_INPUT(scale);
 
-  auto input_shape = grad_out.sizes();
-  auto grad_outputs = grad_out.reshape({input_shape[0], input_shape[1], -1});
-  auto outputs = out.reshape({input_shape[0], input_shape[1], -1});
+  // Assumes channel_first contiguous data
 
-  const unsigned int N = grad_outputs.size(0);
-  const unsigned int C = grad_outputs.size(1);
-  const unsigned int D = grad_outputs.size(2);
+  const unsigned int N = grad_out.size(0);
+  const unsigned int C = grad_out.size(1);
+  const unsigned int D = grad_out[0][0].numel();
 
-  auto grad_tmp = at::empty_like(grad_outputs);
+  auto grad_in = at::empty_like(grad_out);
 
-  const unsigned int threads = min(int(D), 1024);
+  const unsigned int threads = min(int(D), 512);
   const dim3 blocks(C);
 
-  // V Controller
-  AT_DISPATCH_FLOATING_TYPES_AND_HALF(grad_out.scalar_type(), "norm_vctrl", ([&] {
-    norm_vctrl_kernel<scalar_t><<<blocks, threads, threads * sizeof(float)>>>(
-        grad_outputs.data<scalar_t>(),
+  AT_DISPATCH_FLOATING_TYPES_AND_HALF(grad_out.scalar_type(), "norm_bwd_ctrl", ([&] {
+    norm_bwd_ctrl_kernel<scalar_t><<<blocks, threads, 2 * threads * sizeof(float)>>>(
+        grad_out.data<scalar_t>(),
         v.data<float>(),
-        outputs.data<scalar_t>(),
-        grad_tmp.data<scalar_t>(),
+        u.data<float>(),
+        out.data<scalar_t>(),
+        scale.data<scalar_t>(),
+        grad_in.data<scalar_t>(),
         C, N, D, abkw);
   }));
   THCudaCheck(cudaGetLastError());
-
-  const unsigned int threads_ = min(int(C), 1024);
-  const dim3 blocks_(ceil(float(C) / threads_));
-
-  // Scale by the std deviation
-  grad_tmp = grad_tmp / scale.unsqueeze(2);
-
-  // U controller
-  const auto mu_delta = grad_tmp.toType(at::ScalarType::Float).mean({2});
-  grad_tmp.toType(grad_out.scalar_type());
-
-  auto d_u = at::zeros_like(mu_delta).toType(grad_out.scalar_type());
-  AT_DISPATCH_FLOATING_TYPES_AND_HALF(grad_out.scalar_type(), "norm_uctrl", ([&] {
-    norm_uctrl_kernel<scalar_t><<<blocks_, threads_>>>(
-        mu_delta.data<float>(),
-        u.data<float>(),
-        d_u.data<scalar_t>(),
-        C, N, abkw);
-  }));
-  THCudaCheck(cudaGetLastError());
-  const auto grad_in = (grad_tmp.toType(grad_out.scalar_type()) - d_u.unsqueeze(2)).reshape(input_shape);
 
   return {grad_in, u, v};
 }
