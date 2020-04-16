@@ -6,7 +6,7 @@ import numpy as np
 try:
     zero_out_module = tf.load_op_library('./online_norm_gpu.so')
     modes = ["cpu", "gpu"]
-    # modes = ["gpu"]
+
 except:
     zero_out_module = tf.load_op_library('./online_norm_cpu.so')
     modes = ["cpu"]
@@ -25,7 +25,6 @@ config.allow_soft_placement = False
 # Don't perform optimizations for tests so we don't inadvertently run
 # gpu ops on cpu
 config.graph_options.optimizer_options.opt_level = -1
-
 
 # data:
 N = 4
@@ -67,7 +66,6 @@ for funcs in functions:
                         )
                     tf.logging.info(f"function: {funcs}, Device: {mode}, dtype: {dtype}")
                     ans = sess.run(result)
-                    # tf.logging.info(f"found ans: \n {ans}")
 
             for i, val in enumerate(ans):
                 mode_dict = results_dict.get(i, {})
