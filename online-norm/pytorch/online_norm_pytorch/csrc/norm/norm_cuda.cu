@@ -113,17 +113,53 @@ std::vector<at::Tensor> norm_fwd_cuda(
   return {out, scale, s_mu, s_var};
 }
 
-__device__ void warp_reduce(volatile float *s_mem, const unsigned int t_id, const unsigned int d) {
+__device__ void warp_reduce(
+    volatile float *s_mem,
+    const unsigned int t_id,
+    const unsigned int d) {
   for (unsigned int ridx = 32; ridx > 0; ridx /= 2) {
-    if (d > ridx) { if (t_id < ridx) { if ((t_id + ridx) < d) { s_mem[t_id] += s_mem[t_id + ridx]; } } __syncwarp(); }
+    if (d > ridx) {
+      if ((t_id < ridx) && ((t_id + ridx) < d)) {
+        s_mem[t_id] += s_mem[t_id + ridx];
+      }
+      __syncwarp();
+    }
   }
 }
 
+/* 
+ * OnlineNorm backward kernel implementation
+ * The ON bwd algorithm is:
+ *
+ *    grad_tmp = grad_out - (1 - abkw) v_ctrl * out
+ *    v_ctrl = v_ctrl + mean(grad_tmp * out)
+ *    grad_tmp = grad_tmp / scale
+ *    grad_in = grad_tmp - (1 - abkw) u_ctrl
+ *    u_ctrl = u_ctrl + mean(grad_in)
+ *
+ * There out is the output of ON, scale is the std. dev. used to scale the data
+ * in the fwd pass, grad_out is the gradient of the output, grad_in is the
+ * gradient of the input, v_ctrl is the v control variable, u_ctrl is the u
+ * control variable, abkw is the backward decay factor, and mean(.) is the mean
+ * operator.
+ *
+ * The ON algorithm loops over N samples. Each sample has an associated
+ * grad_out, out, and scale. The v and u control variables are applied to the
+ * the gradient to produce the gradient of the input. s_mem_v and s_mem_u are
+ * shared memory used in the reduction (reduction over D) needed to update
+ * v_ctrl and u_ctrl. Each thread block operates on an one of C features
+ * (ie. channel when operating on spatial data). Each channel has a v and u
+ * control variable which are updated per sample by the reductions per thread
+ * block.
+ *
+ * The kernel assumes contiguous inputs inputs of shape (N, C, *) where D is
+ * the product of *.
+ */
 template <typename scalar_t>
 __global__ void norm_bwd_ctrl_kernel(
     const scalar_t* __restrict__ grad_out,
-    float* s_v,
-    float* s_u,
+    float* v_ctrl,
+    float* u_ctrl,
     const scalar_t* __restrict__ out,
     scalar_t* __restrict__ scale,
     scalar_t* __restrict__ grad_in,
@@ -141,43 +177,49 @@ __global__ void norm_bwd_ctrl_kernel(
   scalar_t grad_tmp;
 
   for(int n = 0; n < N; ++n){
-    s_mem_v[t_id] = 0;                              // reset shared mem
-    s_mem_u[t_id] = 0;                              // reset shared mem
+    s_mem_v[t_id] = 0;                              // reset v_ctrl shared mem
+    s_mem_u[t_id] = 0;                              // reset u_ctrl shared mem
     for (idx = t_id; idx < D; idx += d) {
       idx3 = Idx3(n, c, idx, N, C, D);              // idx in global mem
 
-      // vctrl logic
-      grad_tmp = grad_out[idx3] - (1. - (scalar_t)(abkw)) * (scalar_t)(s_v[c]) * out[idx3];
-      s_mem_v[t_id] += (float)(grad_tmp) * (float)(out[idx3]);    // start reduction
+      // v_ctrl logic
+      grad_tmp = grad_out[idx3] - (1. - (scalar_t)(abkw)) * (scalar_t)(v_ctrl[c]) * out[idx3];
+      // start reduction for v_ctrl updt
+      s_mem_v[t_id] += (float)(grad_tmp) * (float)(out[idx3]);
       
       // scale grad
       grad_tmp = grad_tmp / scale[Idx2(n, c, N, C)];
 
-      // uctrl logic
-      grad_in[idx3] = grad_tmp - (1. - (scalar_t)(abkw)) * (scalar_t)(s_u[c]);
-      s_mem_u[t_id] += (float)(grad_in[idx3]);      // start reduction
-    };  
+      // u_ctrl logic
+      grad_tmp = grad_tmp - (1. - (scalar_t)(abkw)) * (scalar_t)(u_ctrl[c]);
+      grad_in[idx3] = grad_tmp;
+      // start reduction for u_ctrl updt
+      s_mem_u[t_id] += (float)(grad_tmp);
+    }
     __syncthreads();
 
-    // update vctrl
     // reduce within thread block % warp reduction
     for (idx = 512; idx > 32; idx /= 2) {
-      if (d > idx) { if (t_id < idx) { if ((t_id + idx) < d) { s_mem_v[t_id] += s_mem_v[t_id + idx]; } } __syncthreads(); }
+      if (d > idx) {
+        if ((t_id < idx) && ((t_id + idx) < d)) {
+          s_mem_v[t_id] += s_mem_v[t_id + idx];
+          s_mem_u[t_id] += s_mem_u[t_id + idx];
+        }
+        __syncthreads();
+      }
     }
-    if (t_id < 32) { warp_reduce(s_mem_v, t_id, d); }     // reduce within warp
 
-    // update vctrl / mv reduction to global mem
-    if (t_id == 0) { s_v[c] += (s_mem_v[0] / D); }
-
-    // update uctrl
-    // reduce within thread block % warp reduction
-    for (idx = 512; idx > 32; idx /= 2) {
-      if (d > idx) { if (t_id < idx) { if ((t_id + idx) < d) { s_mem_u[t_id] += s_mem_u[t_id + idx]; } } __syncthreads(); }
+    // reduce smem within warp
+    if (t_id < 32) {
+      warp_reduce(s_mem_v, t_id, d);
+      warp_reduce(s_mem_u, t_id, d);
     }
-    if (t_id < 32) { warp_reduce(s_mem_u, t_id, d); }     // reduce within warp
 
-    // update uctrl / mv reduction to global mem
-    if (t_id == 0) { s_u[c] += (s_mem_u[0] / D); }
+    // move reduction to global mem to updt ctrl variables
+    if (t_id == 0) {
+      v_ctrl[c] += (s_mem_v[0] / D);    // update v_ctrl
+      u_ctrl[c] += (s_mem_u[0] / D);    // update u_ctrl
+    }
     __syncthreads();
   }
   __syncthreads();
