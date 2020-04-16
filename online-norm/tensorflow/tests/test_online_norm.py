@@ -101,13 +101,14 @@ class TestOnlineNorm(unittest.TestCase):
                     )
                     out = np.array(on_tf_out[0])
 
-                    # numerically compare output
-                    err_msg=f'output comparison failed on itr: {itr}'
-                    np.testing.assert_allclose(
-                        out,
-                        np_out,
-                        rtol=rtol, atol=atol, err_msg=err_msg
-                    )
+                    for n in range(batch_size):
+                        # numerically compare output
+                        err_msg=f'output comparison failed on itr: {itr}, n: {n}'
+                        np.testing.assert_allclose(
+                            out[n],
+                            np_out[n],
+                            rtol=rtol, atol=atol, err_msg=err_msg
+                        )
 
                 if np_grad_out is not None:
                     # get the deltas of the tf layer
@@ -120,14 +121,14 @@ class TestOnlineNorm(unittest.TestCase):
                         )[0][0]
                     )
 
-
-                    # numerically compare deltas
-                    err_msg=f'grad comparison failed on itr: {itr}'
-                    np.testing.assert_allclose(
-                        tf_grad_xs,
-                        np_grad_in,
-                        rtol=rtol, atol=atol, err_msg=err_msg
-                    )
+                    for n in range(batch_size):
+                        # numerically compare deltas
+                        err_msg=f'grad comparison failed on itr: {itr}, n: {n}'
+                        np.testing.assert_allclose(
+                            tf_grad_xs[n],
+                            np_grad_in[n],
+                            rtol=rtol, atol=atol, err_msg=err_msg
+                        )
 
     def test0211_1d_numerical_comparison_on_fprop_vs_np_batchsize1(
         self,

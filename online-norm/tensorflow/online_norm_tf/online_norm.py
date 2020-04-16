@@ -20,8 +20,7 @@ except:
     online_norm_kernel = tf.load_op_library('./online_norm_tf/csrc/online_norm_cpu.so')
 
 online_norm_fwd = online_norm_kernel.online_norm_fwd
-online_norm_u_ctrl = online_norm_kernel.online_norm_u_ctrl
-online_norm_v_ctrl = online_norm_kernel.online_norm_v_ctrl
+online_norm_bwd = online_norm_kernel.online_norm_bwd
 from tensorflow.keras.mixed_precision.experimental import Policy
 
 
@@ -243,9 +242,9 @@ class Norm(Layer):
             update_var = tf.assign(self.var ,out_s_var, validate_shape=True)
             with tf.control_dependencies([update_mu, update_var]):
                 mean = tf.broadcast_to(tf.expand_dims(mean, -1), inputs.shape)
-                scale = tf.expand_dims(scale, -1)
-                scale = tf.broadcast_to(scale, inputs.shape)
-                outputs = ((inputs - mean) / scale)
+                scale_expanded = tf.expand_dims(scale, -1)
+                scale_expanded = tf.broadcast_to(scale_expanded, inputs.shape)
+                outputs = ((inputs - mean) / scale_expanded)
                 out = tf.reshape(outputs, input_shape)
 
             def backward(deltas):
@@ -260,29 +259,19 @@ class Norm(Layer):
                     grad_delta: output deltas for inputs
                 """
                 deltas_shape = deltas.shape
-                deltas = tf.reshape(
+                grad_out = tf.reshape(
                     deltas,
                     [deltas_shape[0], deltas_shape[1], -1]
                 )
-                alpha_bkw = self.alpha_bkw
-                out_v, grad_tmp = online_norm_v_ctrl(
-                    grad_out=deltas,
-                    out=outputs,
+                out_v, out_u, grad_in = online_norm_bwd(
+                    grad_out=grad_out,
                     in_v=self.v_ctrl,
-                    abkw=alpha_bkw,
+                    in_u=self.u_ctrl,
+                    out=outputs,
+                    scale=scale,
+                    abkw=self.alpha_bkw,
                 )
 
-                grad_tmp = grad_tmp / scale
-                mu_delta = tf.reduce_mean(tf.cast(grad_tmp, tf.float32), 2)
-                out_u, d_u = online_norm_u_ctrl(
-                    mu_delta=mu_delta,
-                    in_u=self.u_ctrl,
-                    abkw=alpha_bkw,
-                    T=self.mp_type
-                )
-                d_u = tf.expand_dims(d_u, -1)
-                d_u = tf.broadcast_to(d_u, deltas.shape)
-                grad_in = grad_tmp - d_u
                 grad_in = tf.reshape(grad_in, deltas_shape)
 
                 update_v = tf.assign(self.v_ctrl, out_v)
@@ -291,8 +280,8 @@ class Norm(Layer):
                 with tf.control_dependencies(
                     [update_u, update_v, update_mu, update_var]
                 ):
-                    grad_in = tf.identity(grad_in)
-                    return grad_in
+                    grad_input = tf.identity(grad_in)
+                    return grad_input
 
             with tf.control_dependencies([update_mu, update_var]):
                 return out, backward
