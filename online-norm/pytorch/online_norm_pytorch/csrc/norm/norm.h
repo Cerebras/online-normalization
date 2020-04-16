@@ -27,7 +27,7 @@ std::vector<at::Tensor> norm_bwd_cpu(
     at::Tensor v,
     const at::Tensor out,
     const at::Tensor scale,
-    const float abkw);
+    const float abwd);
 
 #ifdef WITH_CUDA
 std::vector<at::Tensor> norm_fwd_cuda(
@@ -43,7 +43,7 @@ std::vector<at::Tensor> norm_bwd_cuda(
     at::Tensor v,
     const at::Tensor out,
     const at::Tensor scale,
-    const float abkw);
+    const float abwd);
 #endif
 
 // Interface for Python
@@ -79,7 +79,7 @@ inline std::vector<at::Tensor> norm_bwd(
     at::Tensor& v,
     const at::Tensor& out,
     const at::Tensor& scale,
-    const float abkw) {
+    const float abwd) {
   if (grad_out.type().is_cuda()) {
 #ifdef WITH_CUDA
     return norm_bwd_cuda(
@@ -88,7 +88,7 @@ inline std::vector<at::Tensor> norm_bwd(
         v,
         out,
         scale,
-        abkw);
+        abwd);
 #else
     AT_ERROR("Not compiled with GPU support");
 #endif
@@ -99,5 +99,5 @@ inline std::vector<at::Tensor> norm_bwd(
       v,
       out,
       scale,
-      abkw);
+      abwd);
 }

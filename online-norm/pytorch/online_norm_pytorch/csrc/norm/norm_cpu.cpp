@@ -63,7 +63,7 @@ std::vector<at::Tensor> norm_bwd_cpu(
     at::Tensor v,
     const at::Tensor out,
     const at::Tensor scale,
-    const float abkw) {
+    const float abwd) {
   CHECK_INPUT(grad_out);
   CHECK_INPUT(u);
   CHECK_INPUT(v);
@@ -77,11 +77,11 @@ std::vector<at::Tensor> norm_bwd_cpu(
   auto grad_tmp = at::empty_like(grad_outputs[0]);
 
   for (int i = 0; i < grad_outputs.size(0); i++) {
-    grad_tmp = grad_outputs[i] - (1 - abkw) * v.unsqueeze(1).toType(grad_out.scalar_type()) * outputs[i];
+    grad_tmp = grad_outputs[i] - (1 - abwd) * v.unsqueeze(1).toType(grad_out.scalar_type()) * outputs[i];
     v += (grad_tmp.toType(at::ScalarType::Float) * outputs[i].toType(at::ScalarType::Float)).mean({1});
     grad_tmp = grad_tmp / scale[i].unsqueeze(1);
 
-    grad_in[i] = grad_tmp - (1 - abkw) * u.unsqueeze(1).toType(grad_out.scalar_type());
+    grad_in[i] = grad_tmp - (1 - abwd) * u.unsqueeze(1).toType(grad_out.scalar_type());
     u += grad_in[i].toType(at::ScalarType::Float).mean({1});
   }
 
