@@ -131,16 +131,16 @@ __device__ void warp_reduce(
  * OnlineNorm backward kernel implementation
  * The ON bwd algorithm is:
  *
- *    grad_tmp = grad_out - (1 - abkw) v_ctrl * out
+ *    grad_tmp = grad_out - (1 - abwd) v_ctrl * out
  *    v_ctrl = v_ctrl + mean(grad_tmp * out)
  *    grad_tmp = grad_tmp / scale
- *    grad_in = grad_tmp - (1 - abkw) u_ctrl
+ *    grad_in = grad_tmp - (1 - abwd) u_ctrl
  *    u_ctrl = u_ctrl + mean(grad_in)
  *
  * There out is the output of ON, scale is the std. dev. used to scale the data
  * in the fwd pass, grad_out is the gradient of the output, grad_in is the
  * gradient of the input, v_ctrl is the v control variable, u_ctrl is the u
- * control variable, abkw is the backward decay factor, and mean(.) is the mean
+ * control variable, abwd is the backward decay factor, and mean(.) is the mean
  * operator.
  *
  * The ON algorithm loops over N samples. Each sample has an associated
@@ -156,15 +156,15 @@ __device__ void warp_reduce(
  * the product of *.
  */
 template <typename scalar_t>
-__global__ void norm_bwd_ctrl_kernel(
+__global__ void norm_bwd_kernel(
     const scalar_t* __restrict__ grad_out,
     float* v_ctrl,
     float* u_ctrl,
     const scalar_t* __restrict__ out,
-    scalar_t* __restrict__ scale,
+    const scalar_t* __restrict__ scale,
     scalar_t* __restrict__ grad_in,
     const unsigned int C, const unsigned int N, const unsigned int D,
-    const float abkw) {
+    const float abwd) {
 
   const unsigned int t_id = threadIdx.x;
   const unsigned int c = blockIdx.x;
@@ -183,7 +183,8 @@ __global__ void norm_bwd_ctrl_kernel(
       idx3 = Idx3(n, c, idx, N, C, D);              // idx in global mem
 
       // v_ctrl logic
-      grad_tmp = grad_out[idx3] - (1. - (scalar_t)(abkw)) * (scalar_t)(v_ctrl[c]) * out[idx3];
+      grad_tmp = grad_out[idx3] - \
+          (scalar_t)((1. - abwd)) * (scalar_t)(v_ctrl[c]) * out[idx3];
       // start reduction for v_ctrl updt
       s_mem_v[t_id] += (float)(grad_tmp) * (float)(out[idx3]);
       
@@ -191,7 +192,7 @@ __global__ void norm_bwd_ctrl_kernel(
       grad_tmp = grad_tmp / scale[Idx2(n, c, N, C)];
 
       // u_ctrl logic
-      grad_tmp = grad_tmp - (1. - (scalar_t)(abkw)) * (scalar_t)(u_ctrl[c]);
+      grad_tmp = grad_tmp - (scalar_t)((1. - abwd)) * (scalar_t)(u_ctrl[c]);
       grad_in[idx3] = grad_tmp;
       // start reduction for u_ctrl updt
       s_mem_u[t_id] += (float)(grad_tmp);
@@ -231,7 +232,7 @@ std::vector<at::Tensor> norm_bwd_cuda(
     at::Tensor v,
     const at::Tensor out,
     const at::Tensor scale,
-    const float abkw) {
+    const float abwd) {
   CHECK_INPUT(grad_out);
   CHECK_INPUT(u);
   CHECK_INPUT(v);
@@ -249,15 +250,15 @@ std::vector<at::Tensor> norm_bwd_cuda(
   const unsigned int threads = min(int(D), 512);
   const dim3 blocks(C);
 
-  AT_DISPATCH_FLOATING_TYPES_AND_HALF(grad_out.scalar_type(), "norm_bwd_ctrl", ([&] {
-    norm_bwd_ctrl_kernel<scalar_t><<<blocks, threads, 2 * threads * sizeof(float)>>>(
+  AT_DISPATCH_FLOATING_TYPES_AND_HALF(grad_out.scalar_type(), "norm_bwd", ([&] {
+    norm_bwd_kernel<scalar_t><<<blocks, threads, 2 * threads * sizeof(float)>>>(
         grad_out.data<scalar_t>(),
         v.data<float>(),
         u.data<float>(),
         out.data<scalar_t>(),
         scale.data<scalar_t>(),
         grad_in.data<scalar_t>(),
-        C, N, D, abkw);
+        C, N, D, abwd);
   }));
   THCudaCheck(cudaGetLastError());
 
