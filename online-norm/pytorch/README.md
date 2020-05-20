@@ -65,3 +65,9 @@ python setup.py test
 #### Added
 
 - Added CUDA kernel for online norm (removed python loop version of norm, deprecate BON)
+
+### 2020-05-20
+
+#### Added
+
+- make CUDA fwd one kernel instead of 7 small kernels for improved speed
