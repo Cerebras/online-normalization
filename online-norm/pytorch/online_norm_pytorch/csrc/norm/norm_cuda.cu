@@ -4,10 +4,6 @@
  * All rights reserved.
  *
  * Define norm fwd / bwd cpp functions and cuda kernels
- * TODO:
- *    1. This implemetation absorbs only the loop into the kernel. A more
- *       advanced kernel would absorb the entire operation into the CUDA kernel
- *       but for now this is fast enough
  *
  * Author:  Vitaliy Chiley
  * Contact: {vitaliy, info}@cerebras.net
@@ -37,82 +33,9 @@
 #define CHECK_INPUT(x) CHECK_CUDA(x); CHECK_CONTIGUOUS(x)
 
 
-template <typename scalar_t>
-__global__ void norm_fwd_kernel(
-    const float* __restrict__ mu,
-    const float* __restrict__ var,
-    float* __restrict__ s_mu,
-    float* __restrict__ s_var,
-    scalar_t* __restrict__ mean,
-    scalar_t* __restrict__ scale,
-    const unsigned int C, const unsigned int N,
-    const float afwd, const float eps) {
-
-  const unsigned int c = blockIdx.x * blockDim.x + threadIdx.x;
-  if (c < C) {
-    unsigned int idx;
-    float delta;
-    float s_var_local = s_var[c];
-    float s_mu_local = s_mu[c];
-
-    for(int n = 0; n < N; ++n){
-      idx = Idx2(n, c, N, C);
-      scale[idx] = (scalar_t)(sqrt(s_var_local + eps));
-      mean[idx] = (scalar_t)(s_mu_local);
-
-      delta = mu[idx] - s_mu_local;
-
-      s_var_local = afwd * s_var_local + (1. - afwd) * var[idx] + afwd * (1. - afwd) * delta * delta;
-      s_mu_local = s_mu_local + (1. - afwd) * delta;
-    };
-
-    s_var[c] = s_var_local;
-    s_mu[c] = s_mu_local;
-  };
-}
-
-std::vector<at::Tensor> norm_fwd_cuda(
-    const at::Tensor input,
-    at::Tensor s_mu,
-    at::Tensor s_var,
-    const float afwd,
-    const float eps) {
-  CHECK_INPUT(input);
-  CHECK_INPUT(s_mu);
-  CHECK_INPUT(s_var);
-
-  const auto input_shape = input.sizes();
-  const auto inputs = input.reshape({input_shape[0], input_shape[1], -1}).toType(at::ScalarType::Float);
-
-  const auto mu = inputs.mean({2});
-  const auto var = (inputs - mu.unsqueeze(2)).pow(2).mean({2});
-
-  auto scale = at::zeros_like(mu).toType(input.scalar_type());
-  auto mean = at::zeros_like(mu).toType(input.scalar_type());
-
-  const unsigned int N = input_shape[0];
-  const unsigned int C = input_shape[1];
-  
-  const unsigned int threads = min(int(C), 1024);
-  const dim3 blocks(ceil(float(C) / threads));
-
-  AT_DISPATCH_FLOATING_TYPES_AND_HALF(input.scalar_type(), "norm_fwd", ([&] {
-    norm_fwd_kernel<scalar_t><<<blocks, threads>>>(
-        mu.data<float>(),
-        var.data<float>(),
-        s_mu.data<float>(),
-        s_var.data<float>(),
-        mean.data<scalar_t>(),
-        scale.data<scalar_t>(),
-        C, N, afwd, eps);
-  }));
-  THCudaCheck(cudaGetLastError());
-
-  const auto out = ((inputs.toType(input.scalar_type()) - mean.unsqueeze(2)) / scale.unsqueeze(2)).reshape(input_shape);
-
-  return {out, scale, s_mu, s_var};
-}
-
+/* 
+ * shared mem reduction within a warp
+ */
 __device__ void warp_reduce(
     volatile float *s_mem,
     const unsigned int t_id,
@@ -128,6 +51,142 @@ __device__ void warp_reduce(
 }
 
 /* 
+ * OnlineNorm forward kernel implementation
+ * The ON fwd algorithm is:
+ *
+ *    scale = sqrt(s_var + eps)
+ *    out = (input - s_mu) / scale
+ *    mu, var = moments(input)
+ *    diff = mu - s_mu
+ *    s_var = afwd * s_var + (1 - afwd) * var + afwd * (1 - afwd) * diff * diff
+ *    s_mu = s_mu + (1 - afwd) * diff
+ *
+ * where out is the output of ON, scale is the std. dev. used to scale the data
+ * in the fwd pass and is cached for the bwd pass, eps is used for numerical
+ * stability, s_mu and s_var are the streaming mean and variance,
+ * mu and var are the sample mean and variance of the input, diff is an
+ * intermediate stored variable, and afwd is the forward decay factor.
+ *
+ * The ON algorithm loops over N samples. s_mem_mu and s_mem_var are
+ * shared memory used in the reduction (reduction over D) needed to update
+ * s_mu and s_var. Each thread block operates on an one of C features
+ * (ie. channel when operating on spatial data). Each channel has a s_mu and
+ * s_var streaming statistics which are updated per sample by the reductions
+ * per thread block.
+ *
+ * The kernel assumes contiguous inputs inputs of shape (N, C, *) where D is
+ * the product of *.
+ */
+template <typename scalar_t>
+__global__ void norm_fwd_kernel(
+    const scalar_t* __restrict__ input,
+    float* s_mu,
+    float* s_var,
+    scalar_t* __restrict__ scale,
+    scalar_t* __restrict__ out,
+    const unsigned int C, const unsigned int N, const unsigned int D,
+    const float afwd, const float eps) {
+
+  const unsigned int t_id = threadIdx.x;
+  const unsigned int c = blockIdx.x;
+  const unsigned int d = blockDim.x;
+  unsigned int idx3, idx;
+
+  extern __shared__ float s_mem_mu[];
+  float *s_mem_var = &s_mem_mu[d];
+
+  float in_elem_f, sample_mu, sample_var, diff;
+  scalar_t in_elem, m, s;
+
+  for(int n = 0; n < N; ++n){
+    s_mem_mu[t_id] = 0;                             // reset sample mu shared mem
+    s_mem_var[t_id] = 0;                            // reset sample var shared mem
+    // propagate fwd activations and start reduction to compute input mu and var
+    m = (scalar_t)(s_mu[c]);
+    s = (scalar_t)(sqrt(s_var[c] + eps));
+
+    if (t_id == 0) { scale[Idx2(n, c, N, C)] = s; } // store scale used
+
+    for (idx = t_id; idx < D; idx += d) {
+      idx3 = Idx3(n, c, idx, N, C, D);              // idx in global mem
+      in_elem = input[idx3];                        // get input element
+      out[idx3] = (in_elem - m) / s;                // compute output
+    
+      // start 1st and 2nd moment reductions
+      in_elem_f = (float)(in_elem);
+      s_mem_mu[t_id] += in_elem_f;                  // 1st moment reduction
+      s_mem_var[t_id] += in_elem_f * in_elem_f;     // 2nd moment reduction
+    }
+    __syncthreads();
+
+    // reduce within thread block % warp reduction
+    for (idx = 512; idx > 32; idx /= 2) {
+      if (d > idx) {
+        if ((t_id < idx) && ((t_id + idx) < d)) {
+          s_mem_mu[t_id] += s_mem_mu[t_id + idx];   // 1st moment reduction
+          s_mem_var[t_id] += s_mem_var[t_id + idx]; // 2nd moment reduction
+        }
+        __syncthreads();
+      }
+    }
+
+    // reduce smem within warp
+    if (t_id < 32) {
+      warp_reduce(s_mem_mu, t_id, d);               // 1st moment reduction
+      warp_reduce(s_mem_var, t_id, d);              // 2nd moment reduction
+    }
+
+    if (t_id == 0) {
+      // compute sample mu and var to update streaming stats
+      sample_mu = s_mem_mu[0] / D;
+      sample_var = (s_mem_var[0] / D) - (sample_mu * sample_mu);
+
+      // update streaming stats
+      diff = sample_mu - s_mu[c];
+      s_var[c] = afwd * s_var[c] + (1. - afwd) * sample_var + afwd * (1. - afwd) * diff * diff;
+      s_mu[c] = s_mu[c] + (1. - afwd) * diff;
+    }
+    __syncthreads();
+  }
+}
+
+std::vector<at::Tensor> norm_fwd_cuda(
+    const at::Tensor input,
+    at::Tensor s_mu,
+    at::Tensor s_var,
+    const float afwd,
+    const float eps) {
+  CHECK_INPUT(input);
+  CHECK_INPUT(s_mu);
+  CHECK_INPUT(s_var);
+
+  // Assumes channel_first contiguous data
+
+  const unsigned int N = input.size(0);
+  const unsigned int C = input.size(1);
+  const unsigned int D = input[0][0].numel();
+
+  auto scale = at::empty({N, C}, input.type());
+  auto out = at::empty_like(input);
+  
+  const unsigned int threads = min(int(D), 512);
+  const dim3 blocks(C);
+
+  AT_DISPATCH_FLOATING_TYPES_AND_HALF(input.scalar_type(), "norm_fwd", ([&] {
+    norm_fwd_kernel<scalar_t><<<blocks, threads, 2 * threads * sizeof(float)>>>(
+        input.data<scalar_t>(),
+        s_mu.data<float>(),
+        s_var.data<float>(),
+        scale.data<scalar_t>(),
+        out.data<scalar_t>(),
+        C, N, D, afwd, eps);
+  }));
+  THCudaCheck(cudaGetLastError());
+
+  return {out, scale, s_mu, s_var};
+}
+
+/*
  * OnlineNorm backward kernel implementation
  * The ON bwd algorithm is:
  *
@@ -137,7 +196,7 @@ __device__ void warp_reduce(
  *    grad_in = grad_tmp - (1 - abwd) u_ctrl
  *    u_ctrl = u_ctrl + mean(grad_in)
  *
- * There out is the output of ON, scale is the std. dev. used to scale the data
+ * where out is the output of ON, scale is the std. dev. used to scale the data
  * in the fwd pass, grad_out is the gradient of the output, grad_in is the
  * gradient of the input, v_ctrl is the v control variable, u_ctrl is the u
  * control variable, abwd is the backward decay factor, and mean(.) is the mean
