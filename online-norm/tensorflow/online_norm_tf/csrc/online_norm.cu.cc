@@ -14,46 +14,7 @@ using GPUDevice = Eigen::GpuDevice;
 #define Idx2(n, c, N, C) (((n)*(C)) + (c))
 
 
-// forward kernel
-template <typename T>
-__global__ void norm_fwd_kernel(
-  const float* __restrict__ mu,
-  const float* __restrict__ var,
-  const float* __restrict__ in_s_mu,
-  const float* __restrict__ in_s_var,
-  float* __restrict__ out_s_mu,
-  float* __restrict__ out_s_var,
-  T* __restrict__ mean,
-  T* __restrict__ scale,
-  const int C,
-  const int N,
-  const float afwd,
-  const float eps
-) {
-  const unsigned int c = blockIdx.x * blockDim.x + threadIdx.x;
-  if (c < C) {
-    unsigned int idx;
-    float delta;
-    float s_var_local = in_s_var[c];
-    float s_mu_local = in_s_mu[c];
-
-    for(int n = 0; n < N; ++n) {
-      idx = Idx2(n, c, N, C);
-      scale[idx] = (T)(sqrt(s_var_local + eps));
-      mean[idx] = (T)(s_mu_local);
-      delta = mu[idx] - s_mu_local;
-      s_var_local = afwd * s_var_local + (1. - afwd) * var[idx] + \
-          afwd * (1. - afwd) * delta * delta;
-      s_mu_local = s_mu_local + (1. - afwd) * delta;
-    };
-
-    out_s_var[c] = s_var_local;
-    out_s_mu[c] = s_mu_local;
-  };
-}
-
-
-// device reduction helper func
+// device shared mem reduction within warp helper func
 __device__ void warp_reduce(
   volatile float *s_mem,
   const unsigned int t_id,
@@ -67,6 +28,115 @@ __device__ void warp_reduce(
         }
       }
     }
+  }
+}
+
+
+/* 
+ * OnlineNorm forward kernel implementation
+ * The ON fwd algorithm is:
+ *
+ *    scale = sqrt(s_var + eps)
+ *    out = (input - s_mu) / scale
+ *    mu, var = moments(input)
+ *    diff = mu - s_mu
+ *    s_var = afwd * s_var + (1 - afwd) * var + afwd * (1 - afwd) * diff * diff
+ *    s_mu = s_mu + (1 - afwd) * diff
+ *
+ * where out is the output of ON, scale is the std. dev. used to scale the data
+ * in the fwd pass and is cached for the bwd pass, eps is used for numerical
+ * stability, s_mu and s_var are the streaming mean and variance,
+ * mu and var are the sample mean and variance of the input, diff is an
+ * intermediate stored variable, and afwd is the forward decay factor.
+ *
+ * The ON algorithm loops over N samples. s_mem_mu and s_mem_var are
+ * shared memory used in the reduction (reduction over D) needed to update
+ * s_mu and s_var. Each thread block operates on an one of C features
+ * (ie. channel when operating on spatial data). Each channel has a s_mu and
+ * s_var streaming statistics which are updated per sample by the reductions
+ * per thread block.
+ *
+ * The kernel assumes contiguous inputs inputs of shape (N, C, *) where D is
+ * the product of *.
+ */
+template <typename T>
+__global__ void norm_fwd_kernel(
+    const T* __restrict__ input,
+    const float* in_s_mu,
+    const float* in_s_var,
+    float* s_mu,
+    float* s_var,
+    T* __restrict__ out,
+    T* __restrict__ scale,
+    const unsigned int C, const unsigned int N, const unsigned int D,
+    const float afwd, const float eps) {
+
+  const unsigned int t_id = threadIdx.x;
+  const unsigned int c = blockIdx.x;
+  const unsigned int d = blockDim.x;
+  unsigned int idx3, idx;
+
+  extern __shared__ float s_mem_mu[];
+  float *s_mem_var = &s_mem_mu[d];
+
+  float in_elem_f, sample_mu, sample_var, diff;
+  T in_elem, m, s;
+
+  if (t_id == 0) {
+    s_mu[c] = in_s_mu[c];
+    s_var[c] = in_s_var[c];
+  }
+  __syncthreads();
+
+  for(int n = 0; n < N; ++n){
+    s_mem_mu[t_id] = 0;                             // reset sample mu shared mem
+    s_mem_var[t_id] = 0;                            // reset sample var shared mem
+    // propagate fwd activations and start reduction to compute input mu and var
+    m = (T)(s_mu[c]);
+    s = (T)(sqrt(s_var[c] + eps));
+
+    if (t_id == 0) { scale[Idx2(n, c, N, C)] = s; } // store scale used
+
+    for (idx = t_id; idx < D; idx += d) {
+      idx3 = Idx3(n, c, idx, N, C, D);              // idx in global mem
+      in_elem = input[idx3];                        // get input element
+      out[idx3] = (in_elem - m) / s;                // compute output
+    
+      // start 1st and 2nd moment reductions
+      in_elem_f = (float)(in_elem);
+      s_mem_mu[t_id] += in_elem_f;                  // 1st moment reduction
+      s_mem_var[t_id] += in_elem_f * in_elem_f;     // 2nd moment reduction
+    }
+    __syncthreads();
+
+    // reduce within thread block % warp reduction
+    for (idx = 512; idx > 32; idx /= 2) {
+      if (d > idx) {
+        if ((t_id < idx) && ((t_id + idx) < d)) {
+          s_mem_mu[t_id] += s_mem_mu[t_id + idx];   // 1st moment reduction
+          s_mem_var[t_id] += s_mem_var[t_id + idx]; // 2nd moment reduction
+        }
+        __syncthreads();
+      }
+    }
+
+    // reduce smem within warp
+    if (t_id < 32) {
+      warp_reduce(s_mem_mu, t_id, d);               // 1st moment reduction
+      warp_reduce(s_mem_var, t_id, d);              // 2nd moment reduction
+    }
+
+    if (t_id == 0) {
+      // compute sample mu and var to update streaming stats
+      sample_mu = s_mem_mu[0] / D;
+      sample_var = (s_mem_var[0] / D) - (sample_mu * sample_mu);
+
+      // update streaming stats
+      diff = sample_mu - s_mu[c];
+      s_var[c] = afwd * s_var[c] + (1. - afwd) * sample_var + afwd * (1. - afwd) * diff * diff;
+      s_mu[c] = s_mu[c] + (1. - afwd) * diff;
+    }
+    __syncthreads();
   }
 }
 
@@ -183,32 +253,32 @@ template <typename T>
 struct OnlineNormFwdFunctor<GPUDevice, T> {
   void operator()(
     const GPUDevice& d,
-    const float* mu,
-    const float* var,
+    const T* input,
     const float* in_s_mu,
     const float* in_s_var,
     float* out_s_mu,
     float* out_s_var,
-    T* mean,
+    T* out,
     T* scale,
     const int C,
     const int N,
+    const int D,
     const float afwd,
     const float eps
   ){
-    int thread_per_block = min(int(C), 1024);
-    int block_count = ceil(float(C) / thread_per_block);
-    norm_fwd_kernel<T><<<block_count, thread_per_block, 0, d.stream()>>>(
-      mu,
-      var,
+    int thread_per_block = min(int(D), 512);
+    int block_count = C;
+    norm_fwd_kernel<T><<<block_count, thread_per_block, 2 * thread_per_block * sizeof(float), d.stream()>>>(
+      input,
       in_s_mu,
       in_s_var,
       out_s_mu,
       out_s_var,
-      mean,
+      out,
       scale,
       C,
       N,
+      D,
       afwd,
       eps
     );

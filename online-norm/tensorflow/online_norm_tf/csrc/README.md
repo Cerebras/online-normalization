@@ -1,6 +1,6 @@
 ### To build:
 
-1. Setup a virtual enviornment with TF1.14
+1. Setup a virtual environment with TF1.14
 
 ```
 virtualenv -p python3 venv_on

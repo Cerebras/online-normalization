@@ -12,7 +12,10 @@ except:
     modes = ["cpu"]
 
 
-dtypes = [tf.float32, tf.float16]
+dtypes = [
+    tf.float32,
+    tf.float16
+]
 functions = [
     zero_out_module.online_norm_fwd,
     zero_out_module.online_norm_bwd,
@@ -30,10 +33,6 @@ config.graph_options.optimizer_options.opt_level = -1
 N = 4
 C = 3
 D = 5
-data_N_C_D = np.random.uniform(size=[N, C, D])
-data_N_C = np.random.uniform(size=[N, C])
-data_C = np.random.uniform(size=[C])
-
 
 for funcs in functions:
     for dtype in dtypes:
@@ -42,16 +41,14 @@ for funcs in functions:
             with tf.Session(config=config) as sess:
                 with tf.device(f"{mode}:0"):
                     if funcs == zero_out_module.online_norm_fwd:
-                        np_input = np.ones((N,C))
+                        np_input = np.ones((N,C,D))
                         inputs = tf.constant(np_input, dtype=dtype)
                         result = funcs(
-                            mu=tf.cast(inputs, tf.float32),
-                            var=tf.cast(inputs, tf.float32),
-                            in_s_mu=tf.cast(inputs[0,:], tf.float32),
-                            in_s_var=tf.cast(inputs[0,:], tf.float32),
+                            input=inputs,
+                            in_s_mu=tf.cast(inputs[0,:,0], tf.float32),
+                            in_s_var=tf.cast(inputs[0,:,0], tf.float32),
                             afwd=0.3,
-                            eps=0.4,
-                            T=dtype
+                            eps=0.1,
                         )
                     elif funcs == zero_out_module.online_norm_bwd:
                         np_input = np.ones((N,C,D))
@@ -77,6 +74,8 @@ for funcs in functions:
             if len(modes) == 2:
                 error=np.sum(abs(v["cpu"] - v["gpu"]))
                 tf.logging.info(f"{k}: error:{error}")
+                if error:
+                    tf.logging.info(f"v['cpu']: {v['cpu']}\nv['gpu']: {v['gpu']}")
             else:
                 error=v[modes[0]]
                 tf.logging.info(f"{k}: output:{error}")
