@@ -16,16 +16,16 @@ template <typename Device, typename T>
 struct OnlineNormFwdFunctor {
   void operator()(
     const Device& d,
-    const float* mu, // [N, C]
-    const float* var, // [N, C]
-    const float* in_s_mu, // [C]
-    const float* in_s_var, // [C]
-    float* out_s_mu, // [C]
-    float* out_s_var, // [C]
-    T* mean, // [N, C]
-    T* scale, // [N, C]
+    const T* input,         // [N, C, D]
+    const float* in_s_mu,   // [C]
+    const float* in_s_var,  // [C]
+    float* out_s_mu,        // [C]
+    float* out_s_var,       // [C]
+    T* out,                 // [N, C, D]
+    T* scale,               // [N, C]
     const int C,
     const int N,
+    const int D,
     const float afwd,
     const float eps
   );

@@ -224,27 +224,18 @@ class Norm(Layer):
             """
             input_shape = inputs.shape
             inputs = tf.reshape(inputs, [input_shape[0], input_shape[1], -1])
-            mu, var = tf.nn.moments(
-                tf.cast(inputs, self.fp_type),
-                2,
-                keep_dims=False
-            )
-            mean, scale, out_s_mu, out_s_var = online_norm_fwd(
-                mu=mu,
-                var=var,
+
+            out_s_mu, out_s_var, outputs, scale = online_norm_fwd(
+                input=inputs,
                 in_s_mu=self.mu,
                 in_s_var=self.var,
                 afwd=self.alpha_fwd,
                 eps=self.epsilon,
-                T=self.mp_type
             )
+
             update_mu = tf.assign(self.mu, out_s_mu, validate_shape=True)
             update_var = tf.assign(self.var ,out_s_var, validate_shape=True)
             with tf.control_dependencies([update_mu, update_var]):
-                mean = tf.broadcast_to(tf.expand_dims(mean, -1), inputs.shape)
-                scale_expanded = tf.expand_dims(scale, -1)
-                scale_expanded = tf.broadcast_to(scale_expanded, inputs.shape)
-                outputs = ((inputs - mean) / scale_expanded)
                 out = tf.reshape(outputs, input_shape)
 
             def backward(deltas):

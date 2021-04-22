@@ -19,7 +19,6 @@ using GPUDevice = Eigen::GpuDevice;
 #define Idx2(n, c, N, C) (((n)*(C)) + (c))
 
 
-
 // 1. norm_fwd_kernel
 // 2. norm_bwd_kernel
 
@@ -28,14 +27,13 @@ REGISTER_OP("OnlineNormFwd")
   .Attr("T: {float, half}")
   .Attr("afwd: float")
   .Attr("eps: float")
-  .Input("mu: float")
-  .Input("var: float")
+  .Input("input: T")
   .Input("in_s_mu: float")
   .Input("in_s_var: float")
-  .Output("mean: T")
-  .Output("scale: T")
   .Output("out_s_mu: float")
-  .Output("out_s_var: float");
+  .Output("out_s_var: float")
+  .Output("out: T")
+  .Output("scale: T");
 
 REGISTER_OP("OnlineNormBwd")
   .Attr("T: {float, half}")
@@ -57,43 +55,61 @@ extern template struct OnlineNormBwdFunctor<GPUDevice, float>;
 extern template struct OnlineNormBwdFunctor<GPUDevice, Eigen::half>;
 #endif //CPU_ONLY
 
+
 // CPU specialization of actual computation.
 template <typename T>
 struct OnlineNormFwdFunctor<CPUDevice, T> {
   void operator()(
     const CPUDevice& d,
-    const float* mu,
-    const float* var,
+    const T* input,
     const float* in_s_mu,
     const float* in_s_var,
     float* out_s_mu,
     float* out_s_var,
-    T* mean,
+    T* out,
     T* scale,
     const int C,
     const int N,
+    const int D,
     const float afwd,
     const float eps
   ) {
+    int idx;
+    T in_elem, m, s;
+    float sample_mu, sample_var, in_elem_f, diff;
+
     for(int c = 0; c < C; ++c) {
-      unsigned int idx;
-      float delta;
-      float s_var_local = in_s_var[c];
-      float s_mu_local = in_s_mu[c];
+      out_s_mu[c] = in_s_mu[c];
+      out_s_var[c] = in_s_var[c];
       for(int n = 0; n < N; ++n) {
-        idx = Idx2(n, c, N, C);
-        scale[idx] = (T)(sqrt(s_var_local + eps));
-        mean[idx] = (T)(s_mu_local);
+        sample_mu = 0;
+        sample_var = 0;
 
-        delta = mu[idx] - s_mu_local;
+        m = (T)(out_s_mu[c]);
+        s = (T)(sqrt(out_s_var[c] + eps));
 
-        s_var_local = afwd * s_var_local + (1. - afwd) * var[idx] + afwd * (1. - afwd) * delta * delta;
-        s_mu_local = s_mu_local + (1. - afwd) * delta;
-      };
+        scale[Idx2(n, c, N, C)] = s;                    // store scale used
 
-      out_s_var[c] = s_var_local;
-      out_s_mu[c] = s_mu_local;
-    };
+        for(int d = 0; d < D; ++d) {
+          idx = Idx3(n, c, d, N, C, D);                 // idx of elem
+          in_elem = input[idx];                         // get input element
+          out[idx] = (in_elem - m) / s;                 // compute output
+
+          // 1st and 2nd moment reductions
+          in_elem_f = (float)(in_elem);
+          sample_mu += in_elem_f;                       // 1st moment reduction
+          sample_var += in_elem_f * in_elem_f;          // 2nd moment reduction
+        }
+        // compute sample mu and var to update streaming stats
+        sample_mu = sample_mu / D;
+        sample_var = (sample_var / D) - (sample_mu * sample_mu);
+
+        // update streaming stats
+        diff = sample_mu - out_s_mu[c];
+        out_s_var[c] = afwd * out_s_var[c] + (1. - afwd) * sample_var + afwd * (1. - afwd) * diff * diff;
+        out_s_mu[c] = out_s_mu[c] + (1. - afwd) * diff;
+      }
+    }
   }
 };
 
@@ -156,38 +172,38 @@ public:
 
   void Compute(OpKernelContext* context) override {
     // Grab the input tensors
-    const Tensor& mu = context->input(0);
-    const Tensor& var = context->input(1);
-    const Tensor& in_s_mu = context->input(2);
-    const Tensor& in_s_var = context->input(3);
+    const Tensor& input = context->input(0);
+    const Tensor& in_s_mu = context->input(1);
+    const Tensor& in_s_var = context->input(2);
 
-    int N = mu.shape().dim_size(0);
-    int C = mu.shape().dim_size(1);
+    const int N = input.shape().dim_size(0);
+    const int C = input.shape().dim_size(1);
+    const int D = input.shape().dim_size(2);
 
     // Create an output tensor
     Tensor* out_s_mu = NULL;
     Tensor* out_s_var = NULL;
-    Tensor* mean = NULL;
+    Tensor* out = NULL; 
     Tensor* scale = NULL;
 
-    OP_REQUIRES_OK(context, context->allocate_output(0, mu.shape(), &mean));
-    OP_REQUIRES_OK(context, context->allocate_output(1, mu.shape(), &scale));
-    OP_REQUIRES_OK(context, context->allocate_output(2, in_s_mu.shape(), &out_s_mu));
-    OP_REQUIRES_OK(context, context->allocate_output(3, in_s_var.shape(), &out_s_var));
+    OP_REQUIRES_OK(context, context->allocate_output(0, in_s_mu.shape(), &out_s_mu));
+    OP_REQUIRES_OK(context, context->allocate_output(1, in_s_var.shape(), &out_s_var));
+    OP_REQUIRES_OK(context, context->allocate_output(2, input.shape(), &out));
+    OP_REQUIRES_OK(context, context->allocate_output(3, TensorShape({N, C}), &scale));
 
     // Do the computation.
     OnlineNormFwdFunctor<Device, T>()(
       context->eigen_device<Device>(),
-      mu.flat<float>().data(),
-      var.flat<float>().data(),
+      input.flat<T>().data(),
       in_s_mu.flat<float>().data(),
       in_s_var.flat<float>().data(),
       out_s_mu->flat<float>().data(),
       out_s_var->flat<float>().data(),
-      mean->flat<T>().data(),
+      out->flat<T>().data(),
       scale->flat<T>().data(),
       C,
       N,
+      D,
       afwd,
       eps
     );
